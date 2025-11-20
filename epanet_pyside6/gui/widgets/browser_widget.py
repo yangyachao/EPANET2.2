@@ -1,12 +1,14 @@
 """Browser widget for network components."""
 
 from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem, QMenu
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from core.project import EPANETProject
 
 
 class BrowserWidget(QTreeWidget):
     """Tree widget for browsing network components."""
+    # Emits (obj_type, obj_id) where obj_type is 'Node' or 'Link'
+    objectActivated = Signal(str, str)
     
     def __init__(self, project: EPANETProject):
         super().__init__()
@@ -17,9 +19,28 @@ class BrowserWidget(QTreeWidget):
         self.customContextMenuRequested.connect(self.show_context_menu)
         
         # Signals
+        self.itemClicked.connect(self.on_item_clicked)
         self.itemDoubleClicked.connect(self.on_item_double_clicked)
         
         self.refresh()
+    
+    def on_item_clicked(self, item, column):
+        """Handle single-click on item: activate if it's a leaf object."""
+        if item.parent() and item.parent().parent():
+            # This is an object item (leaf node)
+            object_id = item.text(0)
+            category_text = item.parent().text(0)
+            # Extract category name (remove count suffix like " (12)")
+            category = category_text.split(' (')[0] if ' (' in category_text else category_text
+
+            # Determine whether it's a node or link
+            if category in ("Junctions", "Reservoirs", "Tanks"):
+                obj_type = 'Node'
+            else:
+                obj_type = 'Link'
+
+            # Emit signal so main window can respond (same as double-click)
+            self.objectActivated.emit(obj_type, object_id)
     
     def refresh(self):
         """Refresh the tree with current network data."""
@@ -86,11 +107,18 @@ class BrowserWidget(QTreeWidget):
         # Get the object ID
         if item.parent() and item.parent().parent():
             object_id = item.text(0)
-            category = item.parent().text(0)
-            
-            # Find and display object in property editor
-            # TODO: Implement property editor integration
-            print(f"Double-clicked: {category} - {object_id}")
+            category_text = item.parent().text(0)
+            # Extract category name (remove count suffix like " (12)")
+            category = category_text.split(' (')[0] if ' (' in category_text else category_text
+
+            # Determine whether it's a node or link
+            if category in ("Junctions", "Reservoirs", "Tanks"):
+                obj_type = 'Node'
+            else:
+                obj_type = 'Link'
+
+            # Emit signal so main window can respond
+            self.objectActivated.emit(obj_type, object_id)
     
     def show_context_menu(self, position):
         """Show context menu."""
@@ -105,9 +133,9 @@ class BrowserWidget(QTreeWidget):
             # This is an object item
             edit_action = menu.addAction("Edit Properties")
             delete_action = menu.addAction("Delete")
-            
+
             action = menu.exec_(self.mapToGlobal(position))
-            
+
             if action == edit_action:
                 self.on_item_double_clicked(item, 0)
             elif action == delete_action:

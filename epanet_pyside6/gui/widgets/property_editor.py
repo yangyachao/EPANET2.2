@@ -1,12 +1,14 @@
 """Property editor widget."""
 
 from PySide6.QtWidgets import QTableWidget, QTableWidgetItem
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from core.project import EPANETProject
 
 
 class PropertyEditor(QTableWidget):
     """Table widget for editing object properties."""
+    # Emits the object (model instance) after it has been updated
+    objectUpdated = Signal(object)
     
     def __init__(self, project: EPANETProject):
         super().__init__()
@@ -169,7 +171,11 @@ class PropertyEditor(QTableWidget):
             
             # Mark project as modified
             self.project.modified = True
-            
+            # Emit update signal so map/browser can refresh
+            try:
+                self.objectUpdated.emit(self.current_object)
+            except Exception:
+                pass
         except ValueError:
             # Invalid input, maybe revert or show error
             # For now, just ignore

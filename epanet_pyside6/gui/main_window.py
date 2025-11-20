@@ -13,7 +13,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.project import EPANETProject
-from gui.widgets import BrowserWidget, PropertyEditor, MapWidget
+from gui.widgets import BrowserWidget, PropertyEditor, MapWidget, OverviewMapWidget
 
 
 class MainWindow(QMainWindow):
@@ -95,8 +95,8 @@ class MainWindow(QMainWindow):
         run_action.triggered.connect(self.run_simulation)
         project_menu.addAction(run_action)
         
-        # View Menu
-        view_menu = menubar.addMenu("&View")
+        # View Menu (will be populated with dock toggle actions when docks are created)
+        self.view_menu = menubar.addMenu("&View")
         
         # Window Menu
         window_menu = menubar.addMenu("&Window")
@@ -175,6 +175,11 @@ class MainWindow(QMainWindow):
         self.browser_widget = BrowserWidget(self.project)
         self.browser_dock.setWidget(self.browser_widget)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.browser_dock)
+        # Connect browser activation signal to handler
+        try:
+            self.browser_widget.objectActivated.connect(self.on_browser_object_activated)
+        except Exception:
+            pass
         
         # Property editor dock
         self.property_dock = QDockWidget("Property Editor", self)
@@ -182,6 +187,35 @@ class MainWindow(QMainWindow):
         self.property_editor = PropertyEditor(self.project)
         self.property_dock.setWidget(self.property_editor)
         self.addDockWidget(Qt.RightDockWidgetArea, self.property_dock)
+        # Connect property editor updates to handler so map/browser refresh
+        try:
+            self.property_editor.objectUpdated.connect(self.on_property_object_updated)
+        except Exception:
+            pass
+
+        # Overview (mini) map dock
+        try:
+            self.ovmap_dock = QDockWidget("Overview Map", self)
+            self.ovmap_dock.setObjectName("OVMapDock")
+            self.ovmap_widget = OverviewMapWidget(self.map_widget)
+            self.ovmap_dock.setWidget(self.ovmap_widget)
+            # Put overview dock near the top-right by default
+            self.addDockWidget(Qt.RightDockWidgetArea, self.ovmap_dock)
+            # Add toggle to View menu
+            if hasattr(self, 'view_menu') and self.view_menu is not None:
+                self.view_menu.addAction(self.ovmap_dock.toggleViewAction())
+        except Exception:
+            pass
+
+        # Add toggle actions to View menu so closed docks can be reopened
+        try:
+            if hasattr(self, 'view_menu') and self.view_menu is not None:
+                # toggleViewAction returns a QAction that reflects dock visibility
+                self.view_menu.addAction(self.browser_dock.toggleViewAction())
+                self.view_menu.addAction(self.property_dock.toggleViewAction())
+        except Exception:
+            # Fail silently; view menu may not exist in some initialization orders
+            pass
     
     def create_status_bar(self):
         """Create status bar."""
@@ -192,6 +226,83 @@ class MainWindow(QMainWindow):
     def on_map_selection_changed(self, obj):
         """Handle selection changes in the map."""
         self.property_editor.set_object(obj)
+
+    def on_browser_object_activated(self, obj_type: str, obj_id: str):
+        """Handle activation from browser widget: select object in property editor and map."""
+        try:
+            if obj_type == 'Node':
+                obj = self.project.network.get_node(obj_id)
+            else:
+                obj = self.project.network.get_link(obj_id)
+
+            if not obj:
+                return
+
+            # Update property editor
+            self.property_editor.set_object(obj)
+
+            # Clear existing selections on the scene
+            self.map_widget.scene.clearSelection()
+
+            # Select and highlight item on scene
+            try:
+                if obj_type == 'Node' and obj_id in self.map_widget.scene.node_items:
+                    item = self.map_widget.scene.node_items[obj_id]
+                    item.setSelected(True)
+                    # Ensure item is visible and centered
+                    self.map_widget.ensureVisible(item)
+                    self.map_widget.centerOn(item)
+                elif obj_type == 'Link' and obj_id in self.map_widget.scene.link_items:
+                    item = self.map_widget.scene.link_items[obj_id]
+                    item.setSelected(True)
+                    # Center on link midpoint
+                    mid_x = (item.from_pos.x() + item.to_pos.x()) / 2.0
+                    mid_y = (item.from_pos.y() + item.to_pos.y()) / 2.0
+                    from PySide6.QtCore import QPointF
+                    mid_point = QPointF(mid_x, mid_y)
+                    self.map_widget.ensureVisible(item)
+                    self.map_widget.centerOn(mid_point)
+            except Exception as e:
+                # Log or silently ignore individual link centering issues
+                pass
+
+        except Exception:
+            pass
+
+    def on_property_object_updated(self, obj):
+        """Handle updates from property editor: refresh map visuals and browser if needed."""
+        try:
+            # If it's a node, update its graphic position
+            if hasattr(obj, 'node_type'):
+                node_id = obj.id
+                if node_id in self.map_widget.scene.node_items:
+                    item = self.map_widget.scene.node_items[node_id]
+                    # Update view position from model
+                    item.setPos(obj.x, obj.y)
+                    # Ensure connected links update
+                    try:
+                        self.map_widget.scene.update_connected_links(node_id)
+                    except Exception:
+                        pass
+
+            # If it's a link, update link geometry
+            if hasattr(obj, 'link_type'):
+                link_id = obj.id
+                if link_id in self.map_widget.scene.link_items:
+                    link_item = self.map_widget.scene.link_items[link_id]
+                    from_item = self.map_widget.scene.node_items.get(link_item.link.from_node)
+                    to_item = self.map_widget.scene.node_items.get(link_item.link.to_node)
+                    if from_item and to_item:
+                        link_item.update_positions(from_item.pos(), to_item.pos())
+
+            # Refresh browser labels/counts if necessary
+            try:
+                self.browser_widget.refresh()
+            except Exception:
+                pass
+
+        except Exception:
+            pass
         
     def update_title(self):
         """Update window title based on current project."""

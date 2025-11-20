@@ -1,22 +1,48 @@
+; Filename: /Users/kaiquan/Documents/20221015.inp
+; WNTR: 1.3.2
+; Created: 2025-11-20 15:33:20
 [TITLE]
 
 [JUNCTIONS]
 ;ID                      Elevation       Demand Pattern                 
- J1                      164.04199475    158503.23141                            ;
+ A                                  0               0 1                          ;
+ E                                  0               0 1                          ;
+ K                                  0               0 1                          ;
+ F                                  0               0 1                          ;
+ B                                  0               8 1                          ;
+ I                                  0               0 1                          ;
+ G                                  0               0 1                          ;
+ C                                  0              13 1                          ;
+ J                                  0               0 1                          ;
+ H                                  0               0 1                          ;
+ D                                  0              10 1                          ;
+ L                                  0               0 1                          ;
 
 [RESERVOIRS]
 ;ID                                   Head                  Pattern
- R1                       328.0839895                            ;
+ reservoirs1                        0                            ;
 
 [TANKS]
 ;ID                              Elevation           Init Level            Min Level            Max Level             Diameter           Min Volume Volume Curve         Overflow            
 
 [PIPES]
 ;ID                   Node1                Node2                              Length             Diameter            Roughness           Minor Loss               Status
- P1                   R1                   J1                       3280.839895    472.44094488             100               0                 Open   ;
+ AE                   A                    E                               1000             500             100               0                 Open   ;
+ EK                   E                    K                               1000             500             100               0                 Open   ;
+ KF                   K                    F                               1000             500             100               0                 Open   ;
+ FB                   F                    B                               1000             500             100               0                 Open   ;
+ EI                   E                    I                               1000             500             100               0                 Open   ;
+ IG                   I                    G                               1000             500             100               0                 Open   ;
+ FL                   F                    L                               1000             500             100               0                 Open   ;
+ LH                   L                    H                               1000             500             100               0                 Open   ;
+ GJ                   G                    J                               1000             500             100               0                 Open   ;
+ JH                   J                    H                               1000             500             100               0                 Open   ;
+ HD                   H                    D                               1000             500             100               0                 Open   ;
+ GC                   G                    C                               1000             500             100               0                 Open   ;
 
 [PUMPS]
 ;ID                   Node1                Node2                Properties          
+ Pump1                reservoirs1          A                    HEAD     1                      ;
 
 [VALVES]
 ;ID                   Node1                Node2                            Diameter Type              Setting           Minor Loss
@@ -33,15 +59,27 @@
 [PATTERNS]
 ;ID        Multipliers
 
+1 0.740000 0.700000 0.650000 0.600000 0.590000 0.570000
+1 0.570000 0.680000 0.860000 1.020000 1.160000 1.200000
+1 1.230000 1.180000 0.930000 0.890000 0.890000 0.870000
+1 1.160000 1.280000 1.340000 1.300000 1.170000 1.070000
+
 [CURVES]
 ;ID         X-Value      Y-Value     
+;PUMP: 1
+ 1              0.000000   120.000000   ;
+ 1             22.130000   110.000000   ;
+ 1             36.390000    82.740000   ;
+
 
 [CONTROLS]
 
 [RULES]
 
 [ENERGY]
+GLOBAL EFFICIENCY      100.0000
 GLOBAL PRICE           0.0000
+DEMAND CHARGE          0.0000
 
 [EMITTERS]
 ;ID        Flow coefficient
@@ -59,14 +97,16 @@ GLOBAL PRICE           0.0000
  ORDER WALL 1
  GLOBAL BULK 0.0000    
  GLOBAL WALL 0.0000    
+ LIMITING POTENTIAL 0.0000    
+ ROUGHNESS CORRELATION 0.0000    
 
 [MIXING]
 ;Tank ID             Model Fraction
 
 [TIMES]
-DURATION             00:00:00
+DURATION             24:00:00
 HYDRAULIC TIMESTEP   01:00:00
-QUALITY TIMESTEP     00:06:00
+QUALITY TIMESTEP     00:05:00
 PATTERN TIMESTEP     01:00:00
 PATTERN START        00:00:00
 REPORT TIMESTEP      01:00:00
@@ -76,17 +116,19 @@ RULE TIMESTEP        00:06:00
 STATISTIC            NONE      
 
 [REPORT]
+SUMMARY    NO
+PAGE       0
 
 [OPTIONS]
-UNITS                GPM                 
+UNITS                LPS                 
 HEADLOSS             H-W                 
 SPECIFIC GRAVITY     1
 VISCOSITY            1
-TRIALS               200
+TRIALS               40
 ACCURACY             0.001
 CHECKFREQ            2
 MAXCHECK             10
-UNBALANCED           STOP                
+UNBALANCED           CONTINUE 10
 PATTERN              1                   
 DEMAND MULTIPLIER    1
 EMITTER EXPONENT     0.5
@@ -96,8 +138,19 @@ TOLERANCE            0.01
 
 [COORDINATES]
 ;Node      X-Coord    Y-Coord   
-R1                  0.000000000          0.000000000
-J1                100.000000000          0.000000000
+A                1990.847000000       8209.382000000
+E                3409.611000000       8203.661000000
+K                5509.153000000       8203.661000000
+F                6527.460000000       8203.661000000
+B                6533.181000000       9107.551000000
+I                3403.890000000       6905.034000000
+G                3398.169000000       6516.018000000
+C                3398.169000000       5789.474000000
+J                5572.082000000       6516.018000000
+H                6533.181000000       6521.739000000
+D                7780.320000000       6521.739000000
+L                6533.181000000       7002.288000000
+reservoirs1        617.284000000       8216.735000000
 
 [VERTICES]
 ;Link      X-Coord    Y-Coord   
@@ -105,6 +158,8 @@ J1                100.000000000          0.000000000
 [LABELS]
 
 [BACKDROP]
+DIMENSIONS    0.000    0.000    10000.000    10000.000
 UNITS    NONE
+OFFSET    0.00    0.00
 
 [END]

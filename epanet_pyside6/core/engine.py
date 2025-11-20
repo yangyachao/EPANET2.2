@@ -1,0 +1,154 @@
+"""EPANET Engine wrapper using WNTR."""
+
+import wntr
+import pandas as pd
+from typing import Optional, Dict, Any, Tuple
+from .constants import NodeType, LinkType, NodeParam, LinkParam
+
+class Engine:
+    """Wrapper for WNTR engine."""
+    
+    def __init__(self):
+        """Initialize engine."""
+        self.wn: Optional[wntr.network.WaterNetworkModel] = None
+        self.results: Optional[wntr.sim.SimulationResults] = None
+    
+    def open_project(self, filename: str):
+        """Open an EPANET project file."""
+        try:
+            self.wn = wntr.network.WaterNetworkModel(filename)
+            self.results = None
+        except Exception as e:
+            raise RuntimeError(f"Failed to open project: {e}")
+            
+    def save_project(self, filename: str):
+        """Save project to file."""
+        if self.wn:
+            wntr.network.write_inpfile(self.wn, filename)
+            
+    def close_project(self):
+        """Close current project."""
+        self.wn = None
+        self.results = None
+        
+    def run_simulation(self):
+        """Run hydraulic and water quality simulation."""
+        if not self.wn:
+            raise RuntimeError("No project opened")
+            
+        # Use EpanetSimulator
+        sim = wntr.sim.EpanetSimulator(self.wn)
+        self.results = sim.run_sim()
+        
+    def get_version(self) -> str:
+        """Get WNTR/EPANET version."""
+        return f"WNTR {wntr.__version__}"
+        
+    # Data Access Methods
+    
+    def get_nodes(self) -> Dict[str, Any]:
+        """Get all nodes from the network."""
+        if not self.wn:
+            return {}
+        return dict(self.wn.nodes())
+        
+    def get_links(self) -> Dict[str, Any]:
+        """Get all links from the network."""
+        if not self.wn:
+            return {}
+        return dict(self.wn.links())
+        
+    def get_node_result(self, node_id: str, param: NodeParam) -> float:
+        """Get simulation result for a node."""
+        if not self.results:
+            return 0.0
+            
+        try:
+            if param == NodeParam.DEMAND:
+                return self.results.node['demand'].loc[:, node_id].iloc[-1]
+            elif param == NodeParam.HEAD:
+                return self.results.node['head'].loc[:, node_id].iloc[-1]
+            elif param == NodeParam.PRESSURE:
+                return self.results.node['pressure'].loc[:, node_id].iloc[-1]
+            elif param == NodeParam.QUALITY:
+                return self.results.node['quality'].loc[:, node_id].iloc[-1]
+        except KeyError:
+            pass
+        return 0.0
+        
+    def get_link_result(self, link_id: str, param: LinkParam) -> float:
+        """Get simulation result for a link."""
+        if not self.results:
+            return 0.0
+            
+        try:
+            if param == LinkParam.FLOW:
+                return self.results.link['flowrate'].loc[:, link_id].iloc[-1]
+            elif param == LinkParam.VELOCITY:
+                return self.results.link['velocity'].loc[:, link_id].iloc[-1]
+            elif param == LinkParam.HEADLOSS:
+                return self.results.link['headloss'].loc[:, link_id].iloc[-1]
+        except KeyError:
+            pass
+        return 0.0
+
+    def get_time_series(self, obj_type: str, obj_id: str, param: Any) -> Tuple[list, list]:
+        """Get time series data for an object."""
+        if not self.results:
+            return [], []
+            
+        try:
+            if obj_type == 'Node':
+                df = self.results.node
+                if param == NodeParam.DEMAND:
+                    series = df['demand'].loc[:, obj_id]
+                elif param == NodeParam.HEAD:
+                    series = df['head'].loc[:, obj_id]
+                elif param == NodeParam.PRESSURE:
+                    series = df['pressure'].loc[:, obj_id]
+                elif param == NodeParam.QUALITY:
+                    series = df['quality'].loc[:, obj_id]
+                else:
+                    return [], []
+            elif obj_type == 'Link':
+                df = self.results.link
+                if param == LinkParam.FLOW:
+                    series = df['flowrate'].loc[:, obj_id]
+                elif param == LinkParam.VELOCITY:
+                    series = df['velocity'].loc[:, obj_id]
+                elif param == LinkParam.HEADLOSS:
+                    series = df['headloss'].loc[:, obj_id]
+                else:
+                    return [], []
+            else:
+                return [], []
+                
+            # Convert time index (seconds) to hours
+            times = series.index / 3600.0
+            values = series.values
+            return times.tolist(), values.tolist()
+            
+        except KeyError:
+            return [], []
+            
+    def get_pump_energy(self, pump_id: str) -> float:
+        """Get pump energy usage (kWh)."""
+        if not self.results:
+            return 0.0
+            
+        try:
+            # WNTR results structure for energy might vary
+            # Usually it's in link['energy'] if available, or calculated
+            # For EPANET 2.2, energy is often reported in a separate table or needs calculation
+            # Let's check if 'energy' is a valid column in link results
+            # If not, we might need to compute it from power/flow/head
+            
+            # In WNTR, energy is sometimes available as 'energy' in link results
+            if 'energy' in self.results.link:
+                return self.results.link['energy'].loc[:, pump_id].iloc[-1]
+            
+            # Fallback: if not directly available, return 0 for now
+            # Real calculation would require integrating power over time
+            return 0.0
+        except KeyError:
+            return 0.0

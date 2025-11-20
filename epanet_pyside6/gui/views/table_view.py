@@ -1,0 +1,173 @@
+"""Table view for network data and results."""
+
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QComboBox, QLabel, QHBoxLayout, QHeaderView, QPushButton, QFileDialog
+from PySide6.QtCore import Qt
+from core.constants import NodeType, LinkType
+
+class TableView(QWidget):
+    """Widget for displaying network data in tables."""
+    
+    def __init__(self, project, parent=None):
+        super().__init__(parent)
+        self.project = project
+        self.current_type = "Junctions"
+        
+        self.setup_ui()
+        self.refresh_data()
+        
+    def setup_ui(self):
+        """Setup UI components."""
+        layout = QVBoxLayout(self)
+        
+        # Controls
+        controls_layout = QHBoxLayout()
+        
+        self.type_combo = QComboBox()
+        self.type_combo.addItems([
+            "Junctions", "Reservoirs", "Tanks",
+            "Pipes", "Pumps", "Valves"
+        ])
+        self.type_combo.currentTextChanged.connect(self.on_type_changed)
+        controls_layout.addWidget(QLabel("Object Type:"))
+        controls_layout.addWidget(self.type_combo)
+        
+        self.export_btn = QPushButton("Export CSV")
+        self.export_btn.clicked.connect(self.export_to_csv)
+        controls_layout.addWidget(self.export_btn)
+        
+        controls_layout.addStretch()
+        layout.addLayout(controls_layout)
+        
+        # Table
+        self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        layout.addWidget(self.table)
+        
+    def on_type_changed(self, text):
+        """Handle object type change."""
+        self.current_type = text
+        self.refresh_data()
+        
+    def refresh_data(self):
+        """Refresh table data."""
+        self.table.setRowCount(0)
+        self.table.setColumnCount(0)
+        
+        network = self.project.network
+        data = []
+        headers = []
+        
+        if self.current_type == "Junctions":
+            headers = ["ID", "Elevation", "Base Demand", "Demand", "Head", "Pressure"]
+            for node in network.get_junctions():
+                data.append([
+                    node.id,
+                    f"{node.elevation:.2f}",
+                    f"{node.base_demand:.2f}",
+                    f"{node.demand:.2f}",
+                    f"{node.head:.2f}",
+                    f"{node.pressure:.2f}"
+                ])
+        elif self.current_type == "Reservoirs":
+            headers = ["ID", "Head", "Head Pattern", "Head", "Pressure"]
+            for node in network.get_reservoirs():
+                data.append([
+                    node.id,
+                    f"{node.total_head:.2f}", # Using total_head instead of elevation for reservoir base head
+                    str(node.head_pattern_name or ""),
+                    f"{node.head:.2f}",
+                    f"{node.pressure:.2f}"
+                ])
+        elif self.current_type == "Tanks":
+            headers = ["ID", "Elevation", "Init Level", "Min Level", "Max Level", "Diameter", "Head", "Pressure"]
+            for node in network.get_tanks():
+                data.append([
+                    node.id,
+                    f"{node.elevation:.2f}",
+                    f"{node.init_level:.2f}",
+                    f"{node.min_level:.2f}",
+                    f"{node.max_level:.2f}",
+                    f"{node.diameter:.2f}",
+                    f"{node.head:.2f}",
+                    f"{node.pressure:.2f}"
+                ])
+        elif self.current_type == "Pipes":
+            headers = ["ID", "From Node", "To Node", "Length", "Diameter", "Roughness", "Flow", "Velocity", "Headloss"]
+            for link in network.get_pipes():
+                data.append([
+                    link.id,
+                    link.from_node,
+                    link.to_node,
+                    f"{link.length:.2f}",
+                    f"{link.diameter:.2f}",
+                    f"{link.roughness:.2f}",
+                    f"{link.flow:.2f}",
+                    f"{link.velocity:.2f}",
+                    f"{link.headloss:.4f}"
+                ])
+        elif self.current_type == "Pumps":
+            headers = ["ID", "From Node", "To Node", "Flow", "Headloss"]
+            for link in network.get_pumps():
+                data.append([
+                    link.id,
+                    link.from_node,
+                    link.to_node,
+                    f"{link.flow:.2f}",
+                    f"{link.headloss:.2f}"
+                ])
+        elif self.current_type == "Valves":
+            headers = ["ID", "From Node", "To Node", "Diameter", "Type", "Flow", "Velocity", "Headloss"]
+            for link in network.get_valves():
+                data.append([
+                    link.id,
+                    link.from_node,
+                    link.to_node,
+                    f"{link.diameter:.2f}",
+                    link.valve_type.name if hasattr(link, 'valve_type') else "VALVE",
+                    f"{link.flow:.2f}",
+                    f"{link.velocity:.2f}",
+                    f"{link.headloss:.2f}"
+                ])
+                
+        # Populate table
+        self.table.setColumnCount(len(headers))
+        self.table.setHorizontalHeaderLabels(headers)
+        self.table.setRowCount(len(data))
+        
+        for row, row_data in enumerate(data):
+            for col, value in enumerate(row_data):
+                item.setFlags(item.flags() ^ Qt.ItemIsEditable) # Read-only for now
+                self.table.setItem(row, col, item)
+
+    def export_to_csv(self):
+        """Export current table data to CSV."""
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Export to CSV", "", "CSV Files (*.csv);;All Files (*)"
+        )
+        
+        if not filename:
+            return
+            
+        import csv
+        try:
+            with open(filename, 'w', newline='') as f:
+                writer = csv.writer(f)
+                
+                # Write headers
+                headers = []
+                for col in range(self.table.columnCount()):
+                    headers.append(self.table.horizontalHeaderItem(col).text())
+                writer.writerow(headers)
+                
+                # Write data
+                for row in range(self.table.rowCount()):
+                    row_data = []
+                    for col in range(self.table.columnCount()):
+                        item = self.table.item(row, col)
+                        row_data.append(item.text() if item else "")
+                    writer.writerow(row_data)
+                    
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Export Failed", str(e))

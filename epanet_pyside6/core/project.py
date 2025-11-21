@@ -200,7 +200,86 @@ class EPANETProject:
                 # Valve specific
                 if hasattr(wn_link, 'setting') and hasattr(link, 'valve_setting'):
                     wn_link.setting = link.valve_setting
-
+        
+        # Sync Options to WNTR
+        if hasattr(wn, 'options'):
+            opts = self.network.options
+            
+            # Hydraulics
+            if hasattr(wn.options.hydraulic, 'headloss'):
+                if opts.headloss_formula == HeadLossType.HW:
+                    wn.options.hydraulic.headloss = 'H-W'
+                elif opts.headloss_formula == HeadLossType.DW:
+                    wn.options.hydraulic.headloss = 'D-W'
+                elif opts.headloss_formula == HeadLossType.CM:
+                    wn.options.hydraulic.headloss = 'C-M'
+            
+            if hasattr(wn.options.hydraulic, 'viscosity'):
+                wn.options.hydraulic.viscosity = opts.viscosity
+            if hasattr(wn.options.hydraulic, 'specific_gravity'):
+                wn.options.hydraulic.specific_gravity = opts.specific_gravity
+            if hasattr(wn.options.hydraulic, 'trials'):
+                wn.options.hydraulic.trials = opts.trials
+            if hasattr(wn.options.hydraulic, 'accuracy'):
+                wn.options.hydraulic.accuracy = opts.accuracy
+            if hasattr(wn.options.hydraulic, 'demand_multiplier'):
+                wn.options.hydraulic.demand_multiplier = opts.demand_multiplier
+            if hasattr(wn.options.hydraulic, 'emitter_exponent'):
+                wn.options.hydraulic.emitter_exponent = opts.emitter_exponent
+            
+            # Quality
+            if hasattr(wn.options.quality, 'parameter'):
+                if opts.quality_type == QualityType.NONE:
+                    wn.options.quality.parameter = 'NONE'
+                elif opts.quality_type == QualityType.CHEM:
+                    wn.options.quality.parameter = 'CHEMICAL'
+                elif opts.quality_type == QualityType.AGE:
+                    wn.options.quality.parameter = 'AGE'
+                elif opts.quality_type == QualityType.TRACE:
+                    wn.options.quality.parameter = 'TRACE'
+            
+            if hasattr(wn.options.quality, 'diffusivity'):
+                wn.options.quality.diffusivity = opts.diffusivity
+            if hasattr(wn.options.quality, 'tolerance'):
+                wn.options.quality.tolerance = opts.quality_tolerance
+            
+            # Reactions
+            if hasattr(wn.options.reaction, 'bulk_order'):
+                wn.options.reaction.bulk_order = opts.bulk_order
+            if hasattr(wn.options.reaction, 'wall_order'):
+                wn.options.reaction.wall_order = opts.wall_order
+            if hasattr(wn.options.reaction, 'bulk_coeff'):
+                wn.options.reaction.bulk_coeff = opts.global_bulk_coeff
+            if hasattr(wn.options.reaction, 'wall_coeff'):
+                wn.options.reaction.wall_coeff = opts.global_wall_coeff
+            if hasattr(wn.options.reaction, 'limiting_potential'):
+                wn.options.reaction.limiting_potential = opts.limiting_concentration
+            if hasattr(wn.options.reaction, 'roughness_correlation'):
+                wn.options.reaction.roughness_correlation = opts.roughness_correlation
+            
+            # Times
+            if hasattr(wn.options.time, 'duration'):
+                wn.options.time.duration = opts.duration
+            if hasattr(wn.options.time, 'hydraulic_timestep'):
+                wn.options.time.hydraulic_timestep = opts.hydraulic_timestep
+            if hasattr(wn.options.time, 'quality_timestep'):
+                wn.options.time.quality_timestep = opts.quality_timestep
+            if hasattr(wn.options.time, 'pattern_timestep'):
+                wn.options.time.pattern_timestep = opts.pattern_timestep
+            if hasattr(wn.options.time, 'pattern_start'):
+                wn.options.time.pattern_start = opts.pattern_start
+            if hasattr(wn.options.time, 'report_timestep'):
+                wn.options.time.report_timestep = opts.report_timestep
+            if hasattr(wn.options.time, 'report_start'):
+                wn.options.time.report_start = opts.report_start
+            
+            # Energy
+            if hasattr(wn.options.energy, 'global_efficiency'):
+                wn.options.energy.global_efficiency = opts.global_efficiency
+            if hasattr(wn.options.energy, 'global_price'):
+                wn.options.energy.global_price = opts.global_price
+            if hasattr(wn.options.energy, 'demand_charge'):
+                wn.options.energy.demand_charge = opts.demand_charge
     
     def close_project(self):
         """Close current project."""
@@ -352,6 +431,92 @@ class EPANETProject:
                 continue
                 
             self.network.add_link(new_link)
+        
+        # Load Options from WNTR
+        if hasattr(wn, 'options'):
+            opts = wn.options
+            
+            # Hydraulics
+            if hasattr(opts.hydraulic, 'headloss'):
+                headloss_str = str(opts.hydraulic.headloss).upper()
+                if 'H-W' in headloss_str or 'HW' in headloss_str:
+                    self.network.options.headloss_formula = HeadLossType.HW
+                elif 'D-W' in headloss_str or 'DW' in headloss_str:
+                    self.network.options.headloss_formula = HeadLossType.DW
+                elif 'C-M' in headloss_str or 'CM' in headloss_str:
+                    self.network.options.headloss_formula = HeadLossType.CM
+            
+            if hasattr(opts.hydraulic, 'viscosity'):
+                self.network.options.viscosity = opts.hydraulic.viscosity
+            if hasattr(opts.hydraulic, 'specific_gravity'):
+                self.network.options.specific_gravity = opts.hydraulic.specific_gravity
+            if hasattr(opts.hydraulic, 'trials'):
+                self.network.options.trials = opts.hydraulic.trials
+            if hasattr(opts.hydraulic, 'accuracy'):
+                self.network.options.accuracy = opts.hydraulic.accuracy
+            if hasattr(opts.hydraulic, 'unbalanced'):
+                self.network.options.unbalanced = str(opts.hydraulic.unbalanced).upper()
+            if hasattr(opts.hydraulic, 'demand_multiplier'):
+                self.network.options.demand_multiplier = opts.hydraulic.demand_multiplier
+            if hasattr(opts.hydraulic, 'emitter_exponent'):
+                self.network.options.emitter_exponent = opts.hydraulic.emitter_exponent
+            
+            # Quality
+            if hasattr(opts.quality, 'parameter'):
+                qual_str = str(opts.quality.parameter).upper()
+                if 'NONE' in qual_str:
+                    self.network.options.quality_type = QualityType.NONE
+                elif 'CHEMICAL' in qual_str or 'CHEM' in qual_str:
+                    self.network.options.quality_type = QualityType.CHEM
+                elif 'AGE' in qual_str:
+                    self.network.options.quality_type = QualityType.AGE
+                elif 'TRACE' in qual_str:
+                    self.network.options.quality_type = QualityType.TRACE
+            
+            if hasattr(opts.quality, 'diffusivity'):
+                self.network.options.diffusivity = opts.quality.diffusivity
+            if hasattr(opts.quality, 'tolerance'):
+                self.network.options.quality_tolerance = opts.quality.tolerance
+            
+            # Reactions
+            if hasattr(opts.reaction, 'bulk_order'):
+                self.network.options.bulk_order = opts.reaction.bulk_order
+            if hasattr(opts.reaction, 'wall_order'):
+                self.network.options.wall_order = opts.reaction.wall_order
+            if hasattr(opts.reaction, 'bulk_coeff'):
+                self.network.options.global_bulk_coeff = opts.reaction.bulk_coeff
+            if hasattr(opts.reaction, 'wall_coeff'):
+                self.network.options.global_wall_coeff = opts.reaction.wall_coeff
+            if hasattr(opts.reaction, 'limiting_potential'):
+                self.network.options.limiting_concentration = opts.reaction.limiting_potential
+            if hasattr(opts.reaction, 'roughness_correlation'):
+                self.network.options.roughness_correlation = opts.reaction.roughness_correlation
+            
+            # Times
+            if hasattr(opts.time, 'duration'):
+                self.network.options.duration = int(opts.time.duration)
+            if hasattr(opts.time, 'hydraulic_timestep'):
+                self.network.options.hydraulic_timestep = int(opts.time.hydraulic_timestep)
+            if hasattr(opts.time, 'quality_timestep'):
+                self.network.options.quality_timestep = int(opts.time.quality_timestep)
+            if hasattr(opts.time, 'pattern_timestep'):
+                self.network.options.pattern_timestep = int(opts.time.pattern_timestep)
+            if hasattr(opts.time, 'pattern_start'):
+                self.network.options.pattern_start = int(opts.time.pattern_start)
+            if hasattr(opts.time, 'report_timestep'):
+                self.network.options.report_timestep = int(opts.time.report_timestep)
+            if hasattr(opts.time, 'report_start'):
+                self.network.options.report_start = int(opts.time.report_start)
+            if hasattr(opts.time, 'statistic'):
+                self.network.options.statistic = str(opts.time.statistic).upper()
+            
+            # Energy
+            if hasattr(opts.energy, 'global_efficiency'):
+                self.network.options.global_efficiency = opts.energy.global_efficiency
+            if hasattr(opts.energy, 'global_price'):
+                self.network.options.global_price = opts.energy.global_price
+            if hasattr(opts.energy, 'demand_charge'):
+                self.network.options.demand_charge = opts.energy.demand_charge
             
     def _load_results_from_engine(self):
         """Load results into network objects."""

@@ -33,14 +33,33 @@ class BrowserWidget(QTreeWidget):
             # Extract category name (remove count suffix like " (12)")
             category = category_text.split(' (')[0] if ' (' in category_text else category_text
 
-            # Determine whether it's a node or link
+            # Determine object type
             if category in ("Junctions", "Reservoirs", "Tanks"):
                 obj_type = 'Node'
-            else:
+            elif category in ("Pipes", "Pumps", "Valves"):
                 obj_type = 'Link'
+            elif category == "Patterns":
+                obj_type = 'Pattern'
+            elif category == "Curves":
+                obj_type = 'Curve'
+            else:
+                return
 
             # Emit signal so main window can respond (same as double-click)
             self.objectActivated.emit(obj_type, object_id)
+        elif item.parent() and not item.parent().parent():
+            # This is a category item under Patterns or Curves
+            object_id = item.text(0)
+            category_text = item.parent().text(0)
+            category = category_text.split(' (')[0] if ' (' in category_text else category_text
+            
+            if category == "Patterns":
+                obj_type = 'Pattern'
+                self.objectActivated.emit(obj_type, object_id)
+            elif category == "Curves":
+                obj_type = 'Curve'
+                self.objectActivated.emit(obj_type, object_id)
+
     
     def refresh(self):
         """Refresh the tree with current network data."""
@@ -114,11 +133,26 @@ class BrowserWidget(QTreeWidget):
             # Determine whether it's a node or link
             if category in ("Junctions", "Reservoirs", "Tanks"):
                 obj_type = 'Node'
-            else:
+            elif category in ("Pipes", "Pumps", "Valves"):
                 obj_type = 'Link'
+            elif category == "Patterns":
+                obj_type = 'Pattern'
+            elif category == "Curves":
+                obj_type = 'Curve'
+            else:
+                return
 
             # Emit signal so main window can respond
             self.objectActivated.emit(obj_type, object_id)
+        elif item.parent() and not item.parent().parent():
+            # This is a top-level category item (Patterns or Curves)
+            category_text = item.text(0)
+            category = category_text.split(' (')[0] if ' (' in category_text else category_text
+            
+            if category in ("Patterns", "Curves"):
+                # Double-click on category - could add new item
+                pass
+
     
     def show_context_menu(self, position):
         """Show context menu."""

@@ -90,6 +90,12 @@ class MainWindow(QMainWindow):
         # Project Menu
         project_menu = menubar.addMenu("&Project")
         
+        analysis_options_action = QAction("Analysis &Options...", self)
+        analysis_options_action.triggered.connect(self.show_analysis_options)
+        project_menu.addAction(analysis_options_action)
+        
+        project_menu.addSeparator()
+        
         run_action = QAction("&Run Analysis", self)
         run_action.setShortcut("F5")
         run_action.triggered.connect(self.run_simulation)
@@ -227,13 +233,24 @@ class MainWindow(QMainWindow):
         """Handle selection changes in the map."""
         self.property_editor.set_object(obj)
 
+    
     def on_browser_object_activated(self, obj_type: str, obj_id: str):
         """Handle activation from browser widget: select object in property editor and map."""
         try:
-            if obj_type == 'Node':
+            if obj_type == 'Pattern':
+                # Open pattern editor
+                self.edit_pattern(obj_id)
+                return
+            elif obj_type == 'Curve':
+                # Open curve editor
+                self.edit_curve(obj_id)
+                return
+            elif obj_type == 'Node':
                 obj = self.project.network.get_node(obj_id)
-            else:
+            elif obj_type == 'Link':
                 obj = self.project.network.get_link(obj_id)
+            else:
+                return
 
             if not obj:
                 return
@@ -268,6 +285,7 @@ class MainWindow(QMainWindow):
 
         except Exception:
             pass
+
 
     def on_property_object_updated(self, obj):
         """Handle updates from property editor: refresh map visuals and browser if needed."""
@@ -517,6 +535,239 @@ class MainWindow(QMainWindow):
         subwindow.setWindowTitle("Energy Report")
         subwindow.show()
         subwindow.resize(600, 400)
+    
+    # Data Editors
+    
+    def edit_pattern(self, pattern_id: str):
+        """Open pattern editor dialog."""
+        from gui.dialogs import PatternEditor
+        from models import Pattern
+        
+        pattern = self.project.network.get_pattern(pattern_id)
+        if not pattern:
+            QMessageBox.warning(self, "Pattern Not Found", f"Pattern '{pattern_id}' not found.")
+            return
+        
+        dialog = PatternEditor(self)
+        dialog.load_data(pattern_id, pattern.multipliers, pattern.comment)
+        
+        # Connect signal to update pattern
+        def on_pattern_updated(new_id, multipliers, comment):
+            try:
+                # Update pattern data
+                pattern.id = new_id
+                pattern.multipliers = multipliers
+                pattern.comment = comment
+                
+                # If ID changed, update the dictionary key
+                if new_id != pattern_id:
+                    self.project.network.patterns[new_id] = pattern
+                    if pattern_id in self.project.network.patterns:
+                        del self.project.network.patterns[pattern_id]
+                
+                # Mark project as modified
+                self.project.modified = True
+                
+                # Refresh browser
+                self.browser_widget.refresh()
+                
+                self.status_bar.showMessage(f"Pattern '{new_id}' updated")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to update pattern:\n{str(e)}")
+        
+        dialog.pattern_updated.connect(on_pattern_updated)
+        dialog.exec()
+    
+    def edit_curve(self, curve_id: str):
+        """Open curve editor dialog."""
+        from gui.dialogs import CurveEditor
+        from models import Curve, CurveType
+        
+        curve = self.project.network.get_curve(curve_id)
+        if not curve:
+            QMessageBox.warning(self, "Curve Not Found", f"Curve '{curve_id}' not found.")
+            return
+        
+        dialog = CurveEditor(self)
+        
+        # Convert curve type enum to string
+        curve_type_str = "Pump"  # Default
+        if curve.curve_type == CurveType.VOLUME:
+            curve_type_str = "Volume"
+        elif curve.curve_type == CurveType.PUMP:
+            curve_type_str = "Pump"
+        elif curve.curve_type == CurveType.EFFICIENCY:
+            curve_type_str = "Efficiency"
+        elif curve.curve_type == CurveType.HEADLOSS:
+            curve_type_str = "Headloss"
+        
+        dialog.load_data(curve_id, curve_type_str, curve.points, curve.comment)
+        
+        # Connect signal to update curve
+        def on_curve_updated(new_id, curve_type, points, comment):
+            try:
+                # Convert curve type string to enum
+                type_map = {
+                    "Volume": CurveType.VOLUME,
+                    "Pump": CurveType.PUMP,
+                    "Efficiency": CurveType.EFFICIENCY,
+                    "Headloss": CurveType.HEADLOSS
+                }
+                
+                # Update curve data
+                curve.id = new_id
+                curve.curve_type = type_map.get(curve_type, CurveType.PUMP)
+                curve.points = points
+                curve.comment = comment
+                
+                # If ID changed, update the dictionary key
+                if new_id != curve_id:
+                    self.project.network.curves[new_id] = curve
+                    if curve_id in self.project.network.curves:
+                        del self.project.network.curves[curve_id]
+                
+                # Mark project as modified
+                self.project.modified = True
+                
+                # Refresh browser
+                self.browser_widget.refresh()
+                
+                self.status_bar.showMessage(f"Curve '{new_id}' updated")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to update curve:\n{str(e)}")
+        
+        dialog.curve_updated.connect(on_curve_updated)
+        dialog.exec()
+    
+    def show_analysis_options(self):
+        """Show analysis options dialog."""
+        from gui.dialogs import AnalysisOptionsDialog
+        from core.constants import FlowUnits, HeadLossType, QualityType
+        
+        dialog = AnalysisOptionsDialog(self)
+        
+        # Convert Options dataclass to dictionary for dialog
+        options_dict = {}
+        opts = self.project.network.options
+        
+        # Map enum values to strings
+        flow_units_map = {
+            FlowUnits.CFS: "CFS", FlowUnits.GPM: "GPM", FlowUnits.MGD: "MGD",
+            FlowUnits.IMGD: "IMGD", FlowUnits.AFD: "AFD", FlowUnits.LPS: "LPS",
+            FlowUnits.LPM: "LPM", FlowUnits.MLD: "MLD", FlowUnits.CMH: "CMH",
+            FlowUnits.CMD: "CMD"
+        }
+        options_dict["flow_units"] = flow_units_map.get(opts.flow_units, "GPM")
+        
+        headloss_map = {
+            HeadLossType.HW: "HW",
+            HeadLossType.DW: "DW",
+            HeadLossType.CM: "CM"
+        }
+        options_dict["headloss_formula"] = headloss_map.get(opts.headloss_formula, "HW")
+        
+        quality_map = {
+            QualityType.NONE: "NONE",
+            QualityType.CHEM: "CHEMICAL",
+            QualityType.AGE: "AGE",
+            QualityType.TRACE: "TRACE"
+        }
+        options_dict["quality_type"] = quality_map.get(opts.quality_type, "NONE")
+        
+        # Copy other options
+        options_dict["specific_gravity"] = opts.specific_gravity
+        options_dict["viscosity"] = opts.viscosity
+        options_dict["trials"] = opts.trials
+        options_dict["accuracy"] = opts.accuracy
+        options_dict["unbalanced"] = opts.unbalanced
+        options_dict["demand_multiplier"] = opts.demand_multiplier
+        options_dict["emitter_exponent"] = opts.emitter_exponent
+        
+        options_dict["chemical_name"] = opts.chemical_name
+        options_dict["chemical_units"] = opts.chemical_units
+        options_dict["diffusivity"] = opts.diffusivity
+        options_dict["trace_node"] = opts.trace_node
+        options_dict["quality_tolerance"] = opts.quality_tolerance
+        
+        options_dict["bulk_order"] = opts.bulk_order
+        options_dict["wall_order"] = opts.wall_order
+        options_dict["global_bulk_coeff"] = opts.global_bulk_coeff
+        options_dict["global_wall_coeff"] = opts.global_wall_coeff
+        options_dict["limiting_concentration"] = opts.limiting_concentration
+        options_dict["roughness_correlation"] = opts.roughness_correlation
+        
+        options_dict["duration"] = opts.duration
+        options_dict["hydraulic_timestep"] = opts.hydraulic_timestep
+        options_dict["quality_timestep"] = opts.quality_timestep
+        options_dict["pattern_timestep"] = opts.pattern_timestep
+        options_dict["pattern_start"] = opts.pattern_start
+        options_dict["report_timestep"] = opts.report_timestep
+        options_dict["report_start"] = opts.report_start
+        options_dict["statistic"] = opts.statistic
+        
+        options_dict["global_efficiency"] = opts.global_efficiency
+        options_dict["global_price"] = opts.global_price
+        options_dict["demand_charge"] = opts.demand_charge
+        
+        dialog.load_data(options_dict)
+        
+        # Connect signal to update options
+        def on_options_updated(new_options):
+            try:
+                # Map strings back to enums
+                flow_units_reverse = {v: k for k, v in flow_units_map.items()}
+                opts.flow_units = flow_units_reverse.get(new_options["flow_units"], FlowUnits.GPM)
+                
+                headloss_reverse = {v: k for k, v in headloss_map.items()}
+                opts.headloss_formula = headloss_reverse.get(new_options["headloss_formula"], HeadLossType.HW)
+                
+                quality_reverse = {v: k for k, v in quality_map.items()}
+                opts.quality_type = quality_reverse.get(new_options["quality_type"], QualityType.NONE)
+                
+                # Update other options
+                opts.specific_gravity = new_options["specific_gravity"]
+                opts.viscosity = new_options["viscosity"]
+                opts.trials = new_options["trials"]
+                opts.accuracy = new_options["accuracy"]
+                opts.unbalanced = new_options["unbalanced"]
+                opts.demand_multiplier = new_options["demand_multiplier"]
+                opts.emitter_exponent = new_options["emitter_exponent"]
+                
+                opts.chemical_name = new_options["chemical_name"]
+                opts.chemical_units = new_options["chemical_units"]
+                opts.diffusivity = new_options["diffusivity"]
+                opts.trace_node = new_options["trace_node"]
+                opts.quality_tolerance = new_options["quality_tolerance"]
+                
+                opts.bulk_order = new_options["bulk_order"]
+                opts.wall_order = new_options["wall_order"]
+                opts.global_bulk_coeff = new_options["global_bulk_coeff"]
+                opts.global_wall_coeff = new_options["global_wall_coeff"]
+                opts.limiting_concentration = new_options["limiting_concentration"]
+                opts.roughness_correlation = new_options["roughness_correlation"]
+                
+                opts.duration = new_options["duration"]
+                opts.hydraulic_timestep = new_options["hydraulic_timestep"]
+                opts.quality_timestep = new_options["quality_timestep"]
+                opts.pattern_timestep = new_options["pattern_timestep"]
+                opts.pattern_start = new_options["pattern_start"]
+                opts.report_timestep = new_options["report_timestep"]
+                opts.report_start = new_options["report_start"]
+                opts.statistic = new_options["statistic"]
+                
+                opts.global_efficiency = new_options["global_efficiency"]
+                opts.global_price = new_options["global_price"]
+                opts.demand_charge = new_options["demand_charge"]
+                
+                # Mark project as modified
+                self.project.modified = True
+                
+                self.status_bar.showMessage("Analysis options updated")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to update options:\n{str(e)}")
+        
+        dialog.options_updated.connect(on_options_updated)
+        dialog.exec()
     
     # Help
     

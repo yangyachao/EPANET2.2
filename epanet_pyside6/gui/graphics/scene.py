@@ -17,6 +17,7 @@ class NetworkScene(QGraphicsScene):
         self.link_items = {}
         
         self.selectionChanged.connect(self.on_selection_changed)
+        self.node_scale = 1.0  # Will be calculated based on network bounds
         self.load_network()
 
     def on_selection_changed(self):
@@ -46,14 +47,23 @@ class NetworkScene(QGraphicsScene):
         
         network = self.project.network
         
-        # Add Nodes
+        # Calculate adaptive node size based on network bounds
+        self.node_scale = self._calculate_node_scale(network)
+        
+        # Calculate Y-axis flip (EPANET Y goes up, Qt Y goes down)
+        if network.nodes:
+            self.max_y = max(node.y for node in network.nodes.values())
+        else:
+            self.max_y = 0
+        
+        # Add Nodes (with Y-axis flipping)
         for node in network.nodes.values():
             if node.node_type == NodeType.JUNCTION:
-                item = JunctionItem(node)
+                item = JunctionItem(node, scale=self.node_scale, max_y=self.max_y)
             elif node.node_type == NodeType.RESERVOIR:
-                item = ReservoirItem(node)
+                item = ReservoirItem(node, scale=self.node_scale, max_y=self.max_y)
             elif node.node_type == NodeType.TANK:
-                item = TankItem(node)
+                item = TankItem(node, scale=self.node_scale, max_y=self.max_y)
             else:
                 continue
                 
@@ -69,11 +79,11 @@ class NetworkScene(QGraphicsScene):
             to_pos = self.node_items[link.to_node].pos()
             
             if link.link_type == LinkType.PIPE:
-                item = PipeItem(link, from_pos, to_pos)
+                item = PipeItem(link, from_pos, to_pos, scale=self.node_scale)
             elif link.link_type == LinkType.PUMP:
-                item = PumpItem(link, from_pos, to_pos)
+                item = PumpItem(link, from_pos, to_pos, scale=self.node_scale)
             else: # Valve
-                item = ValveItem(link, from_pos, to_pos)
+                item = ValveItem(link, from_pos, to_pos, scale=self.node_scale)
                 
             self.addItem(item)
             self.link_items[link.id] = item
@@ -98,3 +108,42 @@ class NetworkScene(QGraphicsScene):
                 item.update_positions(node_pos, item.to_pos)
             elif item.link.to_node == node_id:
                 item.update_positions(item.from_pos, node_pos)
+    
+    def _calculate_node_scale(self, network):
+        """Calculate appropriate node scale based on network bounds.
+        
+        Returns a scale factor that makes nodes ~1% of the smaller dimension.
+        """
+        if not network.nodes:
+            return 1.0
+        
+        # Get network bounds
+        min_x = min(node.x for node in network.nodes.values())
+        max_x = max(node.x for node in network.nodes.values())
+        min_y = min(node.y for node in network.nodes.values())
+        max_y = max(node.y for node in network.nodes.values())
+        
+        # Calculate dimensions
+        width = max_x - min_x
+        height = max_y - min_y
+        
+        # Avoid division by zero
+        if width == 0 or height == 0:
+            return 1.0
+        
+        # Node size should be ~1% of the smaller dimension
+        # This ensures nodes are visible but not too large
+        smaller_dim = min(width, height)
+        scale = smaller_dim * 0.01
+        
+        # Dynamic minimum scale based on coordinate range magnitude
+        # For GPS coordinates (range < 1), use smaller scale for less overlap
+        # For normal coordinates (range > 100), use larger minimum
+        if smaller_dim < 1:
+            min_scale = 0.0003  # GPS coordinates - reduced to avoid overlap
+        elif smaller_dim < 100:
+            min_scale = 0.3     # Medium range coordinates
+        else:
+            min_scale = 10.0    # Large range coordinates
+        
+        return max(scale, min_scale)

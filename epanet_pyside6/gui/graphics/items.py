@@ -7,13 +7,18 @@ from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPainter
 class NodeItem(QGraphicsEllipseItem):
     """Base class for node graphics items."""
     
-    def __init__(self, node, radius=60):
-        super().__init__(-radius, -radius, radius*2, radius*2)
+    def __init__(self, node, radius=1.0, scale=1.0, max_y=0):
+        # Apply scale to radius
+        scaled_radius = radius * scale
+        super().__init__(-scaled_radius, -scaled_radius, scaled_radius*2, scaled_radius*2)
         self.node = node
-        self.radius = radius
+        self.radius = scaled_radius
+        self.scale = scale
+        self.max_y = max_y
         self.normal_color = Qt.white
-        self.normal_pen = QPen(Qt.black, 8)
-        self.setPos(node.x, node.y)
+        self.normal_pen = QPen(Qt.black, 0.05 * scale)
+        # Flip Y coordinate: EPANET Y goes up, Qt Y goes down
+        self.setPos(node.x, max_y - node.y)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
@@ -26,7 +31,7 @@ class NodeItem(QGraphicsEllipseItem):
         
         # Add shadow effect for selected state
         self.shadow = QGraphicsDropShadowEffect()
-        self.shadow.setBlurRadius(25)
+        self.shadow.setBlurRadius(0.2 * scale)
         self.shadow.setOffset(0, 0)
         self.shadow.setColor(QColor(255, 0, 0, 200))
 
@@ -42,9 +47,9 @@ class NodeItem(QGraphicsEllipseItem):
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange:
-            # Update node model coordinates
+            # Update node model coordinates (flip Y back to EPANET coordinate system)
             self.node.x = value.x()
-            self.node.y = value.y()
+            self.node.y = self.max_y - value.y()
             # Notify connected links to update
             if hasattr(self.scene(), "update_connected_links"):
                 self.scene().update_connected_links(self.node.id)
@@ -54,7 +59,7 @@ class NodeItem(QGraphicsEllipseItem):
                 # Bright yellow/orange fill for selected
                 self.setBrush(QBrush(QColor(255, 255, 100)))
                 # Much thicker and red border
-                self.setPen(QPen(Qt.red, 12))
+                self.setPen(QPen(Qt.red, 0.08 * self.scale))
                 # Add glow effect
                 self.setGraphicsEffect(self.shadow)
             else:
@@ -67,38 +72,41 @@ class NodeItem(QGraphicsEllipseItem):
 class JunctionItem(NodeItem):
     """Graphics item for Junction."""
     
-    def __init__(self, node):
-        super().__init__(node, radius=60)
+    def __init__(self, node, scale=1.0, max_y=0):
+        super().__init__(node, radius=1.0, scale=scale, max_y=max_y)
         self.normal_color = QColor(0, 120, 255)  # Brighter blue
         self.setBrush(QBrush(self.normal_color))
 
 class ReservoirItem(NodeItem):
     """Graphics item for Reservoir."""
     
-    def __init__(self, node):
-        super().__init__(node, radius=100)
+    def __init__(self, node, scale=1.0, max_y=0):
+        super().__init__(node, radius=1.5, scale=scale, max_y=max_y)
         self.normal_color = QColor(0, 200, 0)  # Green
         self.setBrush(QBrush(self.normal_color))
-        self.setRect(-100, -100, 200, 200)
+        r = 1.5 * scale
+        self.setRect(-r, -r, r*2, r*2)
 
 class TankItem(NodeItem):
     """Graphics item for Tank."""
     
-    def __init__(self, node):
-        super().__init__(node, radius=90)
+    def __init__(self, node, scale=1.0, max_y=0):
+        super().__init__(node, radius=1.2, scale=scale, max_y=max_y)
         self.normal_color = QColor(255, 200, 0)  # Brighter yellow
         self.setBrush(QBrush(self.normal_color))
-        self.setRect(-90, -90, 180, 180)
+        r = 1.2 * scale
+        self.setRect(-r, -r, r*2, r*2)
 
 class LinkItem(QGraphicsPathItem):
     """Base class for link graphics items."""
     
-    def __init__(self, link, from_pos, to_pos):
+    def __init__(self, link, from_pos, to_pos, scale=1.0):
         super().__init__()
         self.link = link
         self.from_pos = from_pos
         self.to_pos = to_pos
-        self.normal_pen = QPen(Qt.gray, 30)
+        self.scale = scale
+        self.normal_pen = QPen(Qt.gray, 0.5 * scale)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         self.setAcceptHoverEvents(True)
         
@@ -110,7 +118,7 @@ class LinkItem(QGraphicsPathItem):
         
         # Add shadow effect for selected state
         self.shadow = QGraphicsDropShadowEffect()
-        self.shadow.setBlurRadius(30)
+        self.shadow.setBlurRadius(0.2 * scale)
         self.shadow.setOffset(0, 0)
         self.shadow.setColor(QColor(255, 0, 0, 220))
 
@@ -129,7 +137,7 @@ class LinkItem(QGraphicsPathItem):
         if change == QGraphicsItem.ItemSelectedChange:
             if value:
                 # Much thicker and bright red when selected, plus glow
-                pen = QPen(Qt.red, 50)
+                pen = QPen(Qt.red, 0.8 * self.scale)
                 self.setPen(pen)
                 self.setGraphicsEffect(self.shadow)
                 # Raise z-value to draw on top
@@ -154,21 +162,21 @@ class LinkItem(QGraphicsPathItem):
 
 class PipeItem(LinkItem):
     """Graphics item for Pipe."""
-    def __init__(self, link, from_pos, to_pos):
-        super().__init__(link, from_pos, to_pos)
-        self.normal_pen = QPen(Qt.darkGray, 30)
+    def __init__(self, link, from_pos, to_pos, scale=1.0):
+        super().__init__(link, from_pos, to_pos, scale=scale)
+        self.normal_pen = QPen(Qt.darkGray, 0.5 * scale)
         self.setPen(self.normal_pen)
 
 class PumpItem(LinkItem):
     """Graphics item for Pump."""
-    def __init__(self, link, from_pos, to_pos):
-        super().__init__(link, from_pos, to_pos)
-        self.normal_pen = QPen(QColor(255, 140, 0), 40)  # Darker orange
+    def __init__(self, link, from_pos, to_pos, scale=1.0):
+        super().__init__(link, from_pos, to_pos, scale=scale)
+        self.normal_pen = QPen(QColor(255, 140, 0), 0.6 * scale)  # Darker orange
         self.setPen(self.normal_pen)
 
 class ValveItem(LinkItem):
     """Graphics item for Valve."""
-    def __init__(self, link, from_pos, to_pos):
-        super().__init__(link, from_pos, to_pos)
-        self.normal_pen = QPen(QColor(220, 20, 60), 30)  # Crimson red
+    def __init__(self, link, from_pos, to_pos, scale=1.0):
+        super().__init__(link, from_pos, to_pos, scale=scale)
+        self.normal_pen = QPen(QColor(220, 20, 60), 0.5 * scale)  # Crimson red
         self.setPen(self.normal_pen)

@@ -43,7 +43,9 @@ class ContourView(QWidget):
         
     def refresh_plot(self):
         """Refresh the contour plot."""
-        self.ax.clear()
+        # Clear the entire figure to remove old colorbars
+        self.figure.clear()
+        self.ax = self.figure.add_subplot(111)
         
         param = self.param_combo.currentData()
         if not param:

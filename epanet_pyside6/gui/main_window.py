@@ -24,6 +24,12 @@ class MainWindow(QMainWindow):
         self.project = EPANETProject()
         self.settings = QSettings("US EPA", "EPANET 2.2")
         
+        # Recent files
+        self.recent_files = []
+        self.max_recent_files = 5
+        self.recent_file_actions = []
+        self.load_recent_files()
+        
         self.setup_ui()
         self.create_menus()
         self.create_toolbars()
@@ -33,6 +39,79 @@ class MainWindow(QMainWindow):
         
         # Start with new project
         self.new_project()
+    
+    def load_recent_files(self):
+        """Load recent files from settings."""
+        self.recent_files = self.settings.value("recentFiles", [])
+        # Ensure it's a list of strings
+        if not isinstance(self.recent_files, list):
+            self.recent_files = []
+            
+    def save_recent_files(self):
+        """Save recent files to settings."""
+        self.settings.setValue("recentFiles", self.recent_files)
+        
+    def add_recent_file(self, filename):
+        """Add file to recent files list."""
+        if filename in self.recent_files:
+            self.recent_files.remove(filename)
+        
+        self.recent_files.insert(0, filename)
+        
+        if len(self.recent_files) > self.max_recent_files:
+            self.recent_files = self.recent_files[:self.max_recent_files]
+            
+        self.save_recent_files()
+        self.update_recent_files_menu()
+        
+    def update_recent_files_menu(self):
+        """Update recent files menu items."""
+        # Clear existing actions
+        for action in self.recent_file_actions:
+            self.file_menu.removeAction(action)
+            
+        self.recent_file_actions.clear()
+        
+        # Add separator if we have recent files
+        if self.recent_files and self.exit_action:
+            # Find position before exit action
+            self.file_menu.insertSeparator(self.exit_action)
+            
+            for i, filename in enumerate(self.recent_files):
+                text = f"&{i+1} {os.path.basename(filename)}"
+                action = QAction(text, self)
+                action.setData(filename)
+                action.triggered.connect(lambda checked=False, f=filename: self.open_recent_file(f))
+                self.file_menu.insertAction(self.exit_action, action)
+                self.recent_file_actions.append(action)
+                
+            self.file_menu.insertSeparator(self.exit_action)
+            
+    def open_recent_file(self, filename):
+        """Open a recent file."""
+        if not self.check_save_changes():
+            return
+            
+        if not os.path.exists(filename):
+            QMessageBox.warning(self, "File Not Found", f"File not found:\n{filename}")
+            self.recent_files.remove(filename)
+            self.save_recent_files()
+            self.update_recent_files_menu()
+            return
+            
+        try:
+            self.project.open_project(filename)
+            self.browser_widget.refresh()
+            self.property_editor.set_object(None)
+            self.map_widget.scene.load_network()
+            self.map_widget.fit_network()
+            self.update_title()
+            self.status_bar.showMessage(f"Opened {filename}")
+            
+            # Move to top of list
+            self.add_recent_file(filename)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to open project:\n{str(e)}")
     
     def setup_ui(self):
         """Setup main UI components."""
@@ -58,7 +137,8 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
         
         # File Menu
-        file_menu = menubar.addMenu("&File")
+        self.file_menu = menubar.addMenu("&File")
+        file_menu = self.file_menu
         
         new_action = QAction("&New", self)
         new_action.setShortcut(QKeySequence.New)
@@ -80,12 +160,47 @@ class MainWindow(QMainWindow):
         save_as_action.triggered.connect(self.save_project_as)
         file_menu.addAction(save_as_action)
         
-        file_menu.addSeparator()
+        self.file_menu.addSeparator()
         
-        exit_action = QAction("E&xit", self)
-        exit_action.setShortcut(QKeySequence.Quit)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
+        # Import Submenu
+        import_menu = self.file_menu.addMenu("&Import")
+        
+        import_network_action = QAction("&Network...", self)
+        import_network_action.triggered.connect(self.import_network)
+        import_menu.addAction(import_network_action)
+        
+        import_map_action = QAction("&Map...", self)
+        import_map_action.triggered.connect(self.import_map)
+        import_menu.addAction(import_map_action)
+        
+        import_scenario_action = QAction("&Scenario...", self)
+        import_scenario_action.triggered.connect(self.import_scenario)
+        import_menu.addAction(import_scenario_action)
+        
+        # Export Submenu
+        export_menu = self.file_menu.addMenu("&Export")
+        
+        export_network_action = QAction("&Network...", self)
+        export_network_action.triggered.connect(self.export_network)
+        export_menu.addAction(export_network_action)
+        
+        export_map_action = QAction("&Map...", self)
+        export_map_action.triggered.connect(self.export_map)
+        export_menu.addAction(export_map_action)
+        
+        export_scenario_action = QAction("&Scenario...", self)
+        export_scenario_action.triggered.connect(self.export_scenario)
+        export_menu.addAction(export_scenario_action)
+        
+        self.file_menu.addSeparator()
+        
+        self.exit_action = QAction("E&xit", self)
+        self.exit_action.setShortcut(QKeySequence.Quit)
+        self.exit_action.triggered.connect(self.close)
+        self.file_menu.addAction(self.exit_action)
+        
+        # Initialize recent files menu
+        self.update_recent_files_menu()
         
         # Project Menu
         project_menu = menubar.addMenu("&Project")
@@ -101,8 +216,34 @@ class MainWindow(QMainWindow):
         run_action.triggered.connect(self.run_simulation)
         project_menu.addAction(run_action)
         
-        # View Menu (will be populated with dock toggle actions when docks are created)
+        # View Menu
         self.view_menu = menubar.addMenu("&View")
+        
+        # Zoom controls
+        zoom_in_action = QAction("Zoom &In", self)
+        zoom_in_action.setShortcut("+")
+        zoom_in_action.triggered.connect(self.zoom_in)
+        self.view_menu.addAction(zoom_in_action)
+        
+        zoom_out_action = QAction("Zoom &Out", self)
+        zoom_out_action.setShortcut("-")
+        zoom_out_action.triggered.connect(self.zoom_out)
+        self.view_menu.addAction(zoom_out_action)
+        
+        full_extent_action = QAction("&Full Extent", self)
+        full_extent_action.setShortcut("Home")
+        full_extent_action.triggered.connect(self.full_extent)
+        self.view_menu.addAction(full_extent_action)
+        
+        self.view_menu.addSeparator()
+        
+        # Find Object
+        find_action = QAction("&Find Object...", self)
+        find_action.setShortcut("Ctrl+F")
+        find_action.triggered.connect(self.find_object)
+        self.view_menu.addAction(find_action)
+        
+        self.view_menu.addSeparator()
         
         # Window Menu
         window_menu = menubar.addMenu("&Window")
@@ -362,6 +503,7 @@ class MainWindow(QMainWindow):
                 self.map_widget.fit_network()
                 self.update_title()
                 self.status_bar.showMessage(f"Opened {filename}")
+                self.add_recent_file(filename)
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to open project:\n{str(e)}")
     
@@ -373,6 +515,7 @@ class MainWindow(QMainWindow):
             try:
                 self.project.save_project()
                 self.status_bar.showMessage(f"Saved {self.project.filename}")
+                self.add_recent_file(self.project.filename)
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save project:\n{str(e)}")
     
@@ -390,6 +533,7 @@ class MainWindow(QMainWindow):
                 self.project.save_project(filename)
                 self.setWindowTitle(f"EPANET 2.2 - PySide6 - {os.path.basename(filename)}")
                 self.status_bar.showMessage(f"Saved {filename}")
+                self.add_recent_file(filename)
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save project:\n{str(e)}")
     
@@ -415,6 +559,74 @@ class MainWindow(QMainWindow):
             else:
                 return False
         return True
+        
+    # Import/Export
+    
+    def import_network(self):
+        """Import network from INP file."""
+        if not self.check_save_changes():
+            return
+            
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Import Network", "", "EPANET Input Files (*.inp);;All Files (*.*)"
+        )
+        
+        if filename:
+            try:
+                self.project.open_project(filename)
+                self.browser_widget.refresh()
+                self.property_editor.set_object(None)
+                self.map_widget.scene.load_network()
+                self.map_widget.fit_network()
+                self.update_title()
+                self.status_bar.showMessage(f"Imported network from {filename}")
+                self.add_recent_file(filename)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to import network:\n{str(e)}")
+                
+    def import_map(self):
+        """Import map file."""
+        QMessageBox.information(self, "Not Implemented", "Import Map functionality is coming soon.")
+        
+    def import_scenario(self):
+        """Import scenario file."""
+        QMessageBox.information(self, "Not Implemented", "Import Scenario functionality is coming soon.")
+        
+    def export_network(self):
+        """Export network to INP file."""
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Export Network", "", "EPANET Input Files (*.inp);;All Files (*.*)"
+        )
+        
+        if filename:
+            try:
+                # Ensure extension
+                if not filename.lower().endswith('.inp'):
+                    filename += '.inp'
+                    
+                self.project.save_project(filename)
+                self.status_bar.showMessage(f"Exported network to {filename}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to export network:\n{str(e)}")
+                
+    def export_map(self):
+        """Export map to image file."""
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Export Map", "", "PNG Images (*.png);;JPEG Images (*.jpg);;All Files (*.*)"
+        )
+        
+        if filename:
+            try:
+                # Grab map view as pixmap
+                pixmap = self.map_widget.grab()
+                pixmap.save(filename)
+                self.status_bar.showMessage(f"Exported map to {filename}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to export map:\n{str(e)}")
+                
+    def export_scenario(self):
+        """Export scenario file."""
+        QMessageBox.information(self, "Not Implemented", "Export Scenario functionality is coming soon.")
     
     # Simulation
     
@@ -478,8 +690,7 @@ class MainWindow(QMainWindow):
         
         subwindow = self.mdi_area.addSubWindow(graph_view)
         subwindow.setWindowTitle(f"Graph - {obj_type} {obj.id}")
-        subwindow.show()
-        subwindow.resize(600, 400)
+        subwindow.showMaximized()
         
     def create_table(self):
         """Create a new table window."""
@@ -489,8 +700,7 @@ class MainWindow(QMainWindow):
         
         subwindow = self.mdi_area.addSubWindow(table_view)
         subwindow.setWindowTitle("Network Table")
-        subwindow.show()
-        subwindow.resize(800, 500)
+        subwindow.showMaximized()
         
     def create_contour(self):
         """Create a new contour window."""
@@ -500,8 +710,7 @@ class MainWindow(QMainWindow):
         
         subwindow = self.mdi_area.addSubWindow(contour_view)
         subwindow.setWindowTitle("Network Contour")
-        subwindow.show()
-        subwindow.resize(600, 500)
+        subwindow.showMaximized()
         
     def create_status(self):
         """Create a new status report window."""
@@ -511,8 +720,7 @@ class MainWindow(QMainWindow):
         
         subwindow = self.mdi_area.addSubWindow(status_view)
         subwindow.setWindowTitle("Status Report")
-        subwindow.show()
-        subwindow.resize(500, 600)
+        subwindow.showMaximized()
         
     def create_calibration(self):
         """Create a new calibration window."""
@@ -522,8 +730,7 @@ class MainWindow(QMainWindow):
         
         subwindow = self.mdi_area.addSubWindow(calib_view)
         subwindow.setWindowTitle("Calibration")
-        subwindow.show()
-        subwindow.resize(900, 600)
+        subwindow.showMaximized()
         
     def create_energy(self):
         """Create a new energy report window."""
@@ -533,8 +740,7 @@ class MainWindow(QMainWindow):
         
         subwindow = self.mdi_area.addSubWindow(energy_view)
         subwindow.setWindowTitle("Energy Report")
-        subwindow.show()
-        subwindow.resize(600, 400)
+        subwindow.showMaximized()
     
     # Data Editors
     
@@ -767,6 +973,38 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Failed to update options:\n{str(e)}")
         
         dialog.options_updated.connect(on_options_updated)
+        dialog.exec()
+    
+    # View operations
+    
+    def zoom_in(self):
+        """Zoom in on the map."""
+        self.map_widget.scale(1.2, 1.2)
+        
+    def zoom_out(self):
+        """Zoom out on the map."""
+        self.map_widget.scale(1/1.2, 1/1.2)
+        
+    def full_extent(self):
+        """Zoom to full network extent."""
+        self.map_widget.fit_network()
+        
+    def find_object(self):
+        """Show find object dialog."""
+        from gui.dialogs import FindObjectDialog
+        
+        dialog = FindObjectDialog(self.project, self)
+        
+        # Connect signal to select object
+        def on_object_selected(obj_type, obj_id):
+            try:
+                # Simulate browser activation to select and center object
+                self.on_browser_object_activated(obj_type, obj_id)
+                self.status_bar.showMessage(f"Found {obj_type}: {obj_id}")
+            except Exception as e:
+                QMessageBox.warning(self, "Object Not Found", f"Could not find {obj_type} '{obj_id}'.")
+        
+        dialog.object_selected.connect(on_object_selected)
         dialog.exec()
     
     # Help

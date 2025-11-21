@@ -164,8 +164,6 @@ class EnergyView(QWidget):
     def _calculate_energy_stats(self):
         """Calculate energy statistics for all pumps."""
         try:
-            import wntr.metrics.economic
-            
             wn = self.project.engine.wn
             results = self.project.engine.results
             
@@ -175,6 +173,7 @@ class EnergyView(QWidget):
             # Get simulation duration
             times = results.node['pressure'].index
             duration_hours = (times[-1] - times[0]) / 3600.0
+            timestep_hours = (times[1] - times[0]) / 3600.0 if len(times) > 1 else 1.0
             
             # Get pumps
             pumps = [link_name for link_name, link in wn.links() if link.link_type == 'Pump']
@@ -184,37 +183,62 @@ class EnergyView(QWidget):
             
             energy_stats = {}
             
+            # Constants
+            GRAVITY = 9.81  # m/s²
+            WATER_DENSITY = 1000.0  # kg/m³
+            
             for pump_id in pumps:
-                pump = wn.get_link(pump_id)
-                
-                # Calculate pump power over time
                 try:
-                    pump_power = wntr.metrics.economic.pump_power(wn, results, pump_id)
+                    pump = wn.get_link(pump_id)
                     
-                    if pump_power is None or len(pump_power) == 0:
+                    # Get flow rates (m³/s)
+                    if 'flowrate' not in results.link:
                         continue
+                    flow_series = results.link['flowrate'].loc[:, pump_id]
+                    
+                    # Get start and end nodes
+                    start_node = pump.start_node_name
+                    end_node = pump.end_node_name
+                    
+                    # Get heads at start and end nodes (m)
+                    if 'head' not in results.node:
+                        continue
+                    head_start = results.node['head'].loc[:, start_node]
+                    head_end = results.node['head'].loc[:, end_node]
+                    
+                    # Calculate head gain (m)
+                    head_gain = head_end - head_start
+                    
+                    # Get efficiency (use global efficiency)
+                    efficiency = getattr(wn.options.energy, 'global_efficiency', 75.0) / 100.0
+                    if efficiency <= 0:
+                        efficiency = 0.75
+                    
+                    # Calculate power (W) = (flow * head_gain * density * gravity) / efficiency
+                    # flow is in m³/s, head_gain in m
+                    power_series = (flow_series.abs() * head_gain * WATER_DENSITY * GRAVITY) / efficiency
+                    
+                    # Replace negative or NaN values with 0
+                    power_series = power_series.fillna(0)
+                    power_series[power_series < 0] = 0
                     
                     # Calculate statistics
-                    avg_power_w = pump_power.mean()  # Watts
-                    peak_power_w = pump_power.max()  # Watts
+                    avg_power_w = power_series.mean()  # Watts
+                    peak_power_w = power_series.max()  # Watts
                     avg_kw = avg_power_w / 1000.0
                     peak_kw = peak_power_w / 1000.0
                     
                     # Energy consumption (kWh)
-                    energy_kwh = (avg_power_w * duration_hours) / 1000.0
+                    energy_kwh = (power_series.sum() * timestep_hours) / 1000.0
                     
                     # Utilization (percentage of time pump was on)
-                    flow_series = results.link['flowrate'].loc[:, pump_id]
-                    utilization = (flow_series > 0).sum() / len(flow_series) * 100.0
-                    
-                    # Efficiency (use global efficiency if available)
-                    efficiency = getattr(wn.options.energy, 'global_efficiency', 75.0)
+                    utilization = (flow_series.abs() > 1e-6).sum() / len(flow_series) * 100.0
                     
                     # Volume pumped (m³)
-                    volume_m3 = flow_series.sum() * (times[1] - times[0])  # flow * timestep
+                    volume_m3 = flow_series.abs().sum() * (times[1] - times[0])  # flow * timestep
                     
                     # kWh per m³
-                    kwhr_per_m3 = energy_kwh / volume_m3 if volume_m3 > 0 else 0.0
+                    kwhr_per_m3 = energy_kwh / volume_m3 if volume_m3 > 1e-6 else 0.0
                     
                     # Cost calculation
                     price_per_kwh = getattr(wn.options.energy, 'global_price', 0.0)
@@ -226,7 +250,7 @@ class EnergyView(QWidget):
                     
                     energy_stats[pump_id] = {
                         'utilization': utilization,
-                        'efficiency': efficiency,
+                        'efficiency': efficiency * 100.0,  # Convert back to percentage
                         'kwhr_per_m3': kwhr_per_m3,
                         'avg_kw': avg_kw,
                         'peak_kw': peak_kw,
@@ -236,6 +260,8 @@ class EnergyView(QWidget):
                     
                 except Exception as e:
                     print(f"Error calculating energy for pump {pump_id}: {e}")
+                    import traceback
+                    traceback.print_exc()
                     continue
             
             return energy_stats

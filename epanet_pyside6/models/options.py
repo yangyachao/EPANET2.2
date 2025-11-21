@@ -10,7 +10,7 @@ class Options:
     """Network analysis options."""
     
     # Hydraulics
-    flow_units: FlowUnits = FlowUnits.GPM
+    flow_units: FlowUnits = FlowUnits.LPS  # Default to metric (SI) units
     headloss_formula: HeadLossType = HeadLossType.HW
     specific_gravity: float = 1.0
     viscosity: float = 1.0

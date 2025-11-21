@@ -3,6 +3,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QComboBox, QLabel, QHBoxLayout, QHeaderView, QPushButton, QFileDialog
 from PySide6.QtCore import Qt
 from core.constants import NodeType, LinkType
+from core.units import get_unit_label
 
 class TableView(QWidget):
     """Widget for displaying network data in tables."""
@@ -48,6 +49,22 @@ class TableView(QWidget):
         """Handle object type change."""
         self.current_type = text
         self.refresh_data()
+    
+    def _get_header_with_unit(self, param_name: str, param_type: str) -> str:
+        """Get header with unit label.
+        
+        Args:
+            param_name: Display name of parameter
+            param_type: Type for unit lookup
+            
+        Returns:
+            Header string with unit label
+        """
+        flow_units = self.project.network.options.flow_units
+        unit = get_unit_label(param_type, flow_units)
+        if unit:
+            return f"{param_name} ({unit})"
+        return param_name
         
     def refresh_data(self):
         """Refresh table data."""
@@ -59,7 +76,14 @@ class TableView(QWidget):
         headers = []
         
         if self.current_type == "Junctions":
-            headers = ["ID", "Elevation", "Base Demand", "Demand", "Head", "Pressure"]
+            headers = [
+                "ID",
+                self._get_header_with_unit("Elevation", "elevation"),
+                self._get_header_with_unit("Base Demand", "demand"),
+                self._get_header_with_unit("Demand", "demand"),
+                self._get_header_with_unit("Head", "head"),
+                self._get_header_with_unit("Pressure", "pressure")
+            ]
             for node in network.get_junctions():
                 data.append([
                     node.id,
@@ -70,17 +94,32 @@ class TableView(QWidget):
                     f"{node.pressure:.2f}"
                 ])
         elif self.current_type == "Reservoirs":
-            headers = ["ID", "Head", "Head Pattern", "Head", "Pressure"]
+            headers = [
+                "ID",
+                self._get_header_with_unit("Total Head", "head"),
+                "Head Pattern",
+                self._get_header_with_unit("Head", "head"),
+                self._get_header_with_unit("Pressure", "pressure")
+            ]
             for node in network.get_reservoirs():
                 data.append([
                     node.id,
                     f"{node.total_head:.2f}", # Using total_head instead of elevation for reservoir base head
-                    str(node.head_pattern_name or ""),
+                    str(node.head_pattern or ""),
                     f"{node.head:.2f}",
                     f"{node.pressure:.2f}"
                 ])
         elif self.current_type == "Tanks":
-            headers = ["ID", "Elevation", "Init Level", "Min Level", "Max Level", "Diameter", "Head", "Pressure"]
+            headers = [
+                "ID",
+                self._get_header_with_unit("Elevation", "elevation"),
+                self._get_header_with_unit("Init Level", "level"),
+                self._get_header_with_unit("Min Level", "level"),
+                self._get_header_with_unit("Max Level", "level"),
+                self._get_header_with_unit("Diameter", "diameter"),
+                self._get_header_with_unit("Head", "head"),
+                self._get_header_with_unit("Pressure", "pressure")
+            ]
             for node in network.get_tanks():
                 data.append([
                     node.id,
@@ -93,7 +132,15 @@ class TableView(QWidget):
                     f"{node.pressure:.2f}"
                 ])
         elif self.current_type == "Pipes":
-            headers = ["ID", "From Node", "To Node", "Length", "Diameter", "Roughness", "Flow", "Velocity", "Headloss"]
+            headers = [
+                "ID", "From Node", "To Node",
+                self._get_header_with_unit("Length", "length"),
+                self._get_header_with_unit("Diameter", "diameter"),
+                self._get_header_with_unit("Roughness", "roughness"),
+                self._get_header_with_unit("Flow", "flow"),
+                self._get_header_with_unit("Velocity", "velocity"),
+                self._get_header_with_unit("Headloss", "headloss")
+            ]
             for link in network.get_pipes():
                 data.append([
                     link.id,
@@ -107,7 +154,11 @@ class TableView(QWidget):
                     f"{link.headloss:.4f}"
                 ])
         elif self.current_type == "Pumps":
-            headers = ["ID", "From Node", "To Node", "Flow", "Headloss"]
+            headers = [
+                "ID", "From Node", "To Node",
+                self._get_header_with_unit("Flow", "flow"),
+                self._get_header_with_unit("Headloss", "headloss")
+            ]
             for link in network.get_pumps():
                 data.append([
                     link.id,
@@ -117,7 +168,14 @@ class TableView(QWidget):
                     f"{link.headloss:.2f}"
                 ])
         elif self.current_type == "Valves":
-            headers = ["ID", "From Node", "To Node", "Diameter", "Type", "Flow", "Velocity", "Headloss"]
+            headers = [
+                "ID", "From Node", "To Node",
+                self._get_header_with_unit("Diameter", "diameter"),
+                "Type",
+                self._get_header_with_unit("Flow", "flow"),
+                self._get_header_with_unit("Velocity", "velocity"),
+                self._get_header_with_unit("Headloss", "headloss")
+            ]
             for link in network.get_valves():
                 data.append([
                     link.id,
@@ -137,6 +195,7 @@ class TableView(QWidget):
         
         for row, row_data in enumerate(data):
             for col, value in enumerate(row_data):
+                item = QTableWidgetItem(str(value))
                 item.setFlags(item.flags() ^ Qt.ItemIsEditable) # Read-only for now
                 self.table.setItem(row, col, item)
 

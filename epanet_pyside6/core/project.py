@@ -74,9 +74,10 @@ class EPANETProject:
                 elif node.node_type == NodeType.RESERVOIR:
                     wn.add_reservoir(node.id, base_head=node.total_head, coordinates=(node.x, node.y))
                 elif node.node_type == NodeType.TANK:
+                    # WNTR uses meters for diameter, EPANET uses mm for metric units
                     wn.add_tank(node.id, elevation=node.elevation, init_level=node.init_level, 
                                min_level=node.min_level, max_level=node.max_level, 
-                               diameter=node.diameter, coordinates=(node.x, node.y))
+                               diameter=node.diameter / 1000.0, coordinates=(node.x, node.y))  # Convert mm to m
             
             # Update properties
             if node.id in wn.nodes:
@@ -116,7 +117,7 @@ class EPANETProject:
                 if hasattr(wn_node, 'max_level') and hasattr(node, 'max_level'):
                     wn_node.max_level = node.max_level
                 if hasattr(wn_node, 'diameter') and hasattr(node, 'diameter'):
-                    wn_node.diameter = node.diameter
+                    wn_node.diameter = node.diameter / 1000.0  # Convert mm to m
                 if hasattr(wn_node, 'min_volume') and hasattr(node, 'min_volume'):
                     wn_node.min_volume = node.min_volume
                 if hasattr(wn_node, 'vol_curve_name') and hasattr(node, 'volume_curve'):
@@ -133,8 +134,9 @@ class EPANETProject:
             # Add link if not exists
             if link.id not in wn.links:
                 if link.link_type == LinkType.PIPE:
+                    # WNTR uses meters for diameter, EPANET uses mm for metric units
                     wn.add_pipe(link.id, link.from_node, link.to_node, 
-                               length=link.length, diameter=link.diameter, roughness=link.roughness)
+                               length=link.length, diameter=link.diameter / 1000.0, roughness=link.roughness)  # Convert mm to m
                 elif link.link_type == LinkType.PUMP:
                     wn.add_pump(link.id, link.from_node, link.to_node)
                 elif link.link_type in [LinkType.PRV, LinkType.PSV, LinkType.PBV, LinkType.FCV, LinkType.TCV, LinkType.GPV]:
@@ -147,7 +149,8 @@ class EPANETProject:
                     elif link.link_type == LinkType.TCV: valve_type = "TCV"
                     elif link.link_type == LinkType.GPV: valve_type = "GPV"
                     
-                    wn.add_valve(link.id, link.from_node, link.to_node, diameter=link.diameter, valve_type=valve_type)
+                    # WNTR uses meters for diameter, EPANET uses mm for metric units
+                    wn.add_valve(link.id, link.from_node, link.to_node, diameter=link.diameter / 1000.0, valve_type=valve_type)  # Convert mm to m
 
             # Update properties
             if link.id in wn.links:
@@ -179,7 +182,7 @@ class EPANETProject:
                 if hasattr(wn_link, 'length') and hasattr(link, 'length'):
                     wn_link.length = link.length
                 if hasattr(wn_link, 'diameter') and hasattr(link, 'diameter'):
-                    wn_link.diameter = link.diameter
+                    wn_link.diameter = link.diameter / 1000.0  # Convert mm to m
                 if hasattr(wn_link, 'roughness') and hasattr(link, 'roughness'):
                     wn_link.roughness = link.roughness
                 if hasattr(wn_link, 'minor_loss') and hasattr(link, 'minor_loss'):
@@ -385,6 +388,7 @@ class EPANETProject:
                 if hasattr(node, 'base_head'):
                     new_node.total_head = node.base_head
             elif isinstance(node, wntr.network.Tank):
+                # WNTR uses meters for diameter, EPANET uses mm for metric units
                 new_node = Tank(
                     id=name,
                     x=x, y=y,
@@ -392,7 +396,7 @@ class EPANETProject:
                     init_level=node.init_level,
                     min_level=node.min_level,
                     max_level=node.max_level,
-                    diameter=node.diameter
+                    diameter=node.diameter * 1000.0  # Convert m to mm
                 )
             else:
                 continue
@@ -405,12 +409,13 @@ class EPANETProject:
             to_node = link.end_node_name
             
             if isinstance(link, wntr.network.Pipe):
+                # WNTR uses meters for diameter, EPANET uses mm for metric units
                 new_link = Pipe(
                     id=name,
                     from_node=from_node,
                     to_node=to_node,
                     length=link.length,
-                    diameter=link.diameter,
+                    diameter=link.diameter * 1000.0,  # Convert m to mm
                     roughness=link.roughness
                 )
             elif isinstance(link, wntr.network.Pump):
@@ -420,12 +425,13 @@ class EPANETProject:
                     to_node=to_node
                 )
             elif isinstance(link, wntr.network.Valve):
+                # WNTR uses meters for diameter, EPANET uses mm for metric units
                 new_link = Valve(
                     id=name,
                     valve_type=LinkType.PRV, # Default, need to check type
                     from_node=from_node,
                     to_node=to_node,
-                    diameter=link.diameter
+                    diameter=link.diameter * 1000.0  # Convert m to mm
                 )
             else:
                 continue

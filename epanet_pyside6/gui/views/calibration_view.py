@@ -93,8 +93,8 @@ class CalibrationView(QWidget):
         self.plot_widget.setLabel('left', 'Simulated')
         self.plot_widget.setTitle("Observed vs Simulated")
         
-        # Add diagonal line
-        self.plot_widget.addItem(pg.InfiniteLine(pos=0, angle=45, pen=pg.mkPen('g', style=Qt.DashLine)))
+        # Add diagonal line (y=x reference line will be added when plotting data)
+        self.diagonal_line = None
         
         layout.addWidget(self.plot_widget, stretch=2)
         
@@ -188,7 +188,7 @@ class CalibrationView(QWidget):
         self.observed_data = []
         self.refresh_table()
         self.plot_widget.clear()
-        self.plot_widget.addItem(pg.InfiniteLine(pos=0, angle=45, pen=pg.mkPen('g', style=Qt.DashLine)))
+        self.diagonal_line = None
         self.stats_label.setText("Statistics:\nRMSE: N/A\nCorrelation: N/A")
         
     def refresh_table(self):
@@ -226,9 +226,16 @@ class CalibrationView(QWidget):
         
         # Plot
         self.plot_widget.clear()
-        self.plot_widget.addItem(pg.InfiniteLine(pos=0, angle=45, pen=pg.mkPen('g', style=Qt.DashLine)))
+        self.diagonal_line = None
         
         if observed_values:
+            # Add diagonal reference line (y=x)
+            min_val = min(min(observed_values), min(simulated_values))
+            max_val = max(max(observed_values), max(simulated_values))
+            self.diagonal_line = self.plot_widget.plot([min_val, max_val], [min_val, max_val], 
+                                                        pen=pg.mkPen('g', style=Qt.PenStyle.DashLine))
+            
+            # Plot data points
             self.plot_widget.plot(observed_values, simulated_values, pen=None, symbol='o', symbolBrush='b')
             
             # Statistics

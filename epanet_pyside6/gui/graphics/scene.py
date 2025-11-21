@@ -108,6 +108,59 @@ class NetworkScene(QGraphicsScene):
                 item.update_positions(node_pos, item.to_pos)
             elif item.link.to_node == node_id:
                 item.update_positions(item.from_pos, node_pos)
+                
+    def update_node_colors(self, values, legend_colors, legend_values):
+        """Update node colors based on values and legend."""
+        if not values:
+            # Reset to default
+            for item in self.node_items.values():
+                item.set_color(None)
+            return
+            
+        for node_id, item in self.node_items.items():
+            if node_id in values:
+                val = values[node_id]
+                color = self._get_color_for_value(val, legend_colors, legend_values)
+                item.set_color(color)
+            else:
+                item.set_color(None)
+                
+    def update_link_colors(self, values, legend_colors, legend_values):
+        """Update link colors based on values and legend."""
+        if not values:
+            # Reset to default
+            for item in self.link_items.values():
+                item.set_color(None)
+            return
+            
+        for link_id, item in self.link_items.items():
+            if link_id in values:
+                val = values[link_id]
+                color = self._get_color_for_value(val, legend_colors, legend_values)
+                item.set_color(color)
+            else:
+                item.set_color(None)
+                
+    def _get_color_for_value(self, value, colors, intervals):
+        """Get color for a value based on legend intervals."""
+        # Simple interval matching
+        # intervals: [0, 25, 50, 75, 100]
+        # colors: [blue, cyan, green, yellow, red]
+        # value < 0 -> blue
+        # 0 <= value < 25 -> blue
+        # 25 <= value < 50 -> cyan
+        # ...
+        
+        if value <= intervals[0]:
+            return colors[0]
+        if value >= intervals[-1]:
+            return colors[-1]
+            
+        for i in range(len(intervals) - 1):
+            if intervals[i] <= value < intervals[i+1]:
+                return colors[i]
+                
+        return colors[-1]
     
     def _calculate_node_scale(self, network):
         """Calculate appropriate node scale based on network bounds.

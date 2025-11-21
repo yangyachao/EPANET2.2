@@ -68,6 +68,13 @@ class NodeItem(QGraphicsEllipseItem):
                 self.setPen(self.normal_pen)
                 self.setGraphicsEffect(None)
         return super().itemChange(change, value)
+        
+    def set_color(self, color):
+        """Set the node color."""
+        if color:
+            self.setBrush(QBrush(color))
+        else:
+            self.setBrush(QBrush(self.normal_color))
 
 class JunctionItem(NodeItem):
     """Graphics item for Junction."""
@@ -148,6 +155,14 @@ class LinkItem(QGraphicsPathItem):
                 self.setGraphicsEffect(None)
                 self.setZValue(0)
         return super().itemChange(change, value)
+        
+    def set_color(self, color):
+        """Set the link color."""
+        if color:
+            pen = QPen(color, 0.5 * self.scale)
+            self.setPen(pen)
+        else:
+            self.setPen(self.normal_pen)
 
     def update_positions(self, from_pos, to_pos):
         self.from_pos = from_pos

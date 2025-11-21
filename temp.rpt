@@ -1,4 +1,4 @@
-  Page 1                                    Fri Nov 21 09:31:18 2025
+  Page 1                                    Fri Nov 21 09:41:57 2025
 
   ******************************************************************
   *                           E P A N E T                          *
@@ -7,61 +7,6 @@
   *                         Version 2.2                            *
   ******************************************************************
   
-  Analysis begun Fri Nov 21 09:31:18 2025
+  Analysis begun Fri Nov 21 09:41:57 2025
 
-   
-  Hydraulic Status:
-  -----------------------------------------------------------------------
-     0:00:00: Balanced after 6 trials
-     0:00:00: Reservoir R00001 is emptying
-     0:00:00: Tank T00002 is emptying at 15.00 m
-   
-     1:00:00: Balanced after 3 trials
-   
-     2:00:00: Balanced after 3 trials
-   
-     3:00:00: Balanced after 3 trials
-     3:00:00: Tank T00002 is filling at 15.00 m
-   
-     4:00:00: Balanced after 3 trials
-   
-     5:00:00: Balanced after 2 trials
-   
-     6:00:00: Balanced after 3 trials
-   
-     7:00:00: Balanced after 3 trials
-     7:00:00: Tank T00002 is emptying at 15.00 m
-   
-     8:00:00: Balanced after 3 trials
-   
-     9:00:00: Balanced after 4 trials
-   
-    10:00:00: Balanced after 1 trials
-   
-    11:00:00: Balanced after 2 trials
-   
-    12:00:00: Balanced after 3 trials
-   
-    13:00:00: Balanced after 1 trials
-   
-    14:00:00: Balanced after 2 trials
-   
-    15:00:00: Balanced after 3 trials
-   
-    16:00:00: Balanced after 2 trials
-   
-    17:00:00: Balanced after 3 trials
-   
-    18:00:00: Balanced after 3 trials
-   
-    19:00:00: Balanced after 3 trials
-   
-    20:00:00: Balanced after 3 trials
-   
-    21:00:00: Balanced after 2 trials
-   
-    22:00:00: Balanced after 2 trials
-   
-    23:00:00: Balanced after 2 trials
-   
-  Analysis ended Fri Nov 21 09:31:18 2025
+  Analysis ended Fri Nov 21 09:41:57 2025

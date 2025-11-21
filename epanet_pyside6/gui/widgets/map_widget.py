@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QGraphicsView
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPainter
 from gui.graphics.scene import NetworkScene
+from .legend_widget import LegendWidget
 
 class MapWidget(QGraphicsView):
     """Interactive map widget."""
@@ -19,6 +20,10 @@ class MapWidget(QGraphicsView):
         self.setDragMode(QGraphicsView.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
+        
+        # Legend
+        self.legend = LegendWidget("Legend", self)
+        self.legend.hide()
         
         # Initial fit
         self.fit_network()
@@ -37,3 +42,9 @@ class MapWidget(QGraphicsView):
         factor = 1.1 if zoom_in else 0.9
         self.scale(factor, factor)
         event.accept()
+        
+    def resizeEvent(self, event):
+        """Handle resize to position legend."""
+        super().resizeEvent(event)
+        # Position legend in top-left corner
+        self.legend.move(10, 10)

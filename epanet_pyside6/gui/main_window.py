@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QMenuBar, QFileDialog, QMessageBox, QProgressDialog
 )
 from PySide6.QtCore import Qt, QSettings
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence, QColor
 import sys
 import os
 
@@ -325,6 +325,10 @@ class MainWindow(QMainWindow):
         # Connect browser activation signal to handler
         try:
             self.browser_widget.objectActivated.connect(self.on_browser_object_activated)
+            # Connect map browser signals
+            self.browser_widget.map_browser.node_parameter_changed.connect(self.on_node_param_changed)
+            self.browser_widget.map_browser.link_parameter_changed.connect(self.on_link_param_changed)
+            self.browser_widget.map_browser.time_changed.connect(self.on_time_changed)
         except Exception:
             pass
         
@@ -655,6 +659,17 @@ class MainWindow(QMainWindow):
             
             # Update UI with results
             self.browser_widget.refresh()
+            
+            # Update map browser time steps
+            if self.project.engine.results and self.project.engine.results.node:
+                # Get time steps from any node result (e.g. pressure)
+                # If pressure not available, try demand, etc.
+                # Usually all node results have same time index
+                for param in self.project.engine.results.node:
+                    times = self.project.engine.results.node[param].index.tolist()
+                    self.browser_widget.map_browser.set_time_steps(times)
+                    break
+            
             self.status_bar.showMessage("Simulation completed successfully")
             
         except Exception as e:
@@ -1006,6 +1021,145 @@ class MainWindow(QMainWindow):
         
         dialog.object_selected.connect(on_object_selected)
         dialog.exec()
+        
+    # Map Visualization Handlers
+    
+    def on_node_param_changed(self, param):
+        """Handle node parameter change."""
+        self.current_node_param = param
+        self._update_map_colors()
+        
+    def on_link_param_changed(self, param):
+        """Handle link parameter change."""
+        self.current_link_param = param
+        self._update_map_colors()
+        
+    def on_time_changed(self, time_step):
+        """Handle time step change."""
+        self.current_time_step = time_step
+        self._update_map_colors()
+        
+    def _update_map_colors(self):
+        """Update map colors based on current parameters and time."""
+        # Initialize current params if not set
+        if not hasattr(self, 'current_node_param'): self.current_node_param = None
+        if not hasattr(self, 'current_link_param'): self.current_link_param = None
+        if not hasattr(self, 'current_time_step'): self.current_time_step = 0
+        
+        results = self.project.engine.results
+        if not results:
+            return
+
+        # Colors for legend (Blue -> Cyan -> Green -> Yellow -> Red)
+        colors = [QColor(0,0,255), QColor(0,255,255), QColor(0,255,0), QColor(255,255,0), QColor(255,0,0)]
+        
+        # Update Nodes
+        if self.current_node_param:
+            param = self.current_node_param.lower()
+            # Map UI names to WNTR result names
+            param_map = {
+                "elevation": "elevation", # usually property, not result, but handled
+                "base demand": "base_demand",
+                "initial quality": "initial_quality",
+                "demand": "demand",
+                "head": "head",
+                "pressure": "pressure",
+                "quality": "quality"
+            }
+            wntr_param = param_map.get(param, param)
+            
+            values = {}
+            if wntr_param in results.node:
+                # Get values for current time step
+                # results.node[param] is a DataFrame, index is time
+                try:
+                    # Get the row for the current time step (index)
+                    # Assuming time steps are sequential integers in slider matching result index
+                    # But WNTR results index is time in seconds.
+                    # We need to map slider index to time index.
+                    times = results.node[wntr_param].index
+                    if self.current_time_step < len(times):
+                        t = times[self.current_time_step]
+                        row = results.node[wntr_param].loc[t]
+                        values = row.to_dict()
+                except Exception as e:
+                    print(f"Error getting node results: {e}")
+            
+            if values:
+                # Calculate min/max for legend
+                min_val = min(values.values())
+                max_val = max(values.values())
+                
+                # Create 5 intervals
+                if min_val == max_val:
+                    intervals = [min_val] * 5
+                else:
+                    step = (max_val - min_val) / 4
+                    intervals = [min_val + i*step for i in range(5)]
+                
+                # Update Legend
+                # TODO: Handle multiple legends (node/link) - for now just show node if selected
+                self.map_widget.legend.set_data(self.current_node_param, "", intervals, colors)
+                self.map_widget.legend.show()
+                
+                # Update Scene
+                self.map_widget.scene.update_node_colors(values, colors, intervals)
+            else:
+                self.map_widget.legend.hide()
+                self.map_widget.scene.update_node_colors({}, [], [])
+        else:
+            if not self.current_link_param:
+                self.map_widget.legend.hide()
+            self.map_widget.scene.update_node_colors({}, [], [])
+
+        # Update Links
+        if self.current_link_param:
+            param = self.current_link_param.lower()
+            param_map = {
+                "length": "length",
+                "diameter": "diameter",
+                "roughness": "roughness",
+                "flow": "flowrate",
+                "velocity": "velocity",
+                "unit headloss": "headloss", # check this
+                "friction factor": "friction_factor",
+                "reaction rate": "reaction_rate",
+                "quality": "quality"
+            }
+            wntr_param = param_map.get(param, param)
+            
+            values = {}
+            if wntr_param in results.link:
+                try:
+                    times = results.link[wntr_param].index
+                    if self.current_time_step < len(times):
+                        t = times[self.current_time_step]
+                        row = results.link[wntr_param].loc[t]
+                        values = row.to_dict()
+                except Exception as e:
+                    print(f"Error getting link results: {e}")
+            
+            if values:
+                # Calculate min/max
+                min_val = min(values.values())
+                max_val = max(values.values())
+                
+                if min_val == max_val:
+                    intervals = [min_val] * 5
+                else:
+                    step = (max_val - min_val) / 4
+                    intervals = [min_val + i*step for i in range(5)]
+                
+                # Update Legend (Override node legend for now if link selected)
+                # Ideally we need two legends or a switch
+                self.map_widget.legend.set_data(self.current_link_param, "", intervals, colors)
+                self.map_widget.legend.show()
+                
+                self.map_widget.scene.update_link_colors(values, colors, intervals)
+            else:
+                self.map_widget.scene.update_link_colors({}, [], [])
+        else:
+            self.map_widget.scene.update_link_colors({}, [], [])
     
     # Help
     

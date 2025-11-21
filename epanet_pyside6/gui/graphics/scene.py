@@ -1,12 +1,13 @@
 """Graphics scene for EPANET network map."""
 
 from PySide6.QtWidgets import QGraphicsScene
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QRectF
+from PySide6.QtGui import QPen, QColor, QBrush, QPixmap
 from .items import JunctionItem, ReservoirItem, TankItem, PipeItem, PumpItem, ValveItem
 from core.constants import NodeType, LinkType
 
 class NetworkScene(QGraphicsScene):
-    """Custom graphics scene for network editing."""
+    """Graphics scene for network display."""
     
     selectionChanged = Signal(object)  # Emits the selected object (Node or Link) or None
 
@@ -15,6 +16,10 @@ class NetworkScene(QGraphicsScene):
         self.project = project
         self.node_items = {}
         self.link_items = {}
+        self.backdrop_item = None
+        
+        # Set scene background
+        self.setBackgroundBrush(QBrush(Qt.white))
         
         self.selectionChanged.connect(self.on_selection_changed)
         self.node_scale = 1.0  # Will be calculated based on network bounds
@@ -200,3 +205,105 @@ class NetworkScene(QGraphicsScene):
             min_scale = 10.0    # Large range coordinates
         
         return max(scale, min_scale)
+    
+    def set_backdrop(self, image_path, ul_x, ul_y, lr_x, lr_y):
+        """Set backdrop image."""
+        from PySide6.QtWidgets import QGraphicsPixmapItem
+        
+        if self.backdrop_item:
+            self.removeItem(self.backdrop_item)
+            self.backdrop_item = None
+            
+        if not image_path:
+            return
+            
+        pixmap = QPixmap(image_path)
+        if pixmap.isNull():
+            return
+            
+        self.backdrop_item = QGraphicsPixmapItem(pixmap)
+        self.addItem(self.backdrop_item)
+        self.backdrop_item.setZValue(-100) # Ensure it's at the bottom
+        
+        # Scale and position
+        # EPANET coordinates: Y increases upwards
+        # Qt coordinates: Y increases downwards
+        # We need to map UL (x1, y1) and LR (x2, y2) from EPANET to Qt scene
+        
+        # Calculate width and height in world coordinates
+        world_w = abs(lr_x - ul_x)
+        world_h = abs(ul_y - lr_y) # y1 is top (max y), y2 is bottom (min y)
+        
+        if world_w == 0 or world_h == 0:
+            return
+            
+        # Calculate scale factors
+        img_w = pixmap.width()
+        img_h = pixmap.height()
+        
+        scale_x = world_w / img_w
+        scale_y = world_h / img_h
+        
+        # Apply transformation
+        self.backdrop_item.resetTransform()
+        
+        # Position:
+        # In our scene, we flip Y. So max_y (ul_y) corresponds to smaller scene Y (top).
+        # Actually, our scene uses (x, max_y - y).
+        # Let's assume the scene's coordinate system is already set up such that
+        # we just need to place the image at the correct location.
+        
+        # Wait, the NodeItems are placed at (x, max_y - y).
+        # So the scene origin (0,0) is at (0, max_y).
+        # We need to find where (ul_x, ul_y) maps to.
+        # scene_x = ul_x
+        # scene_y = self.max_y - ul_y
+        
+        # We need self.max_y which is calculated in load_network.
+        # But load_network might not have run or max_y might be different.
+        # Let's use the max_y from the current network bounds if available.
+        
+        # For simplicity, let's assume the backdrop coordinates define the rect.
+        # We place the pixmap at (ul_x, self.max_y - ul_y) and scale it.
+        # But wait, the image needs to be flipped vertically? 
+        # No, QGraphicsPixmapItem draws image normally (top-down).
+        # Our scene is normal (top-down), but we position nodes by flipping their Y.
+        # So the "World Top" (max Y) is at Scene Y = 0 (or small).
+        # The "World Bottom" (min Y) is at Scene Y = large.
+        
+        # So UL corner of image (World x1, y1) should be at Scene (x1, max_y - y1).
+        # LR corner of image (World x2, y2) should be at Scene (x2, max_y - y2).
+        
+        # However, we need to know 'max_y' of the coordinate system to do the flip.
+        # The NodeItems use 'self.max_y' which is the max Y of the NETWORK nodes.
+        # The backdrop might extend beyond the network.
+        # This implies we should use a consistent reference.
+        # If we use the same 'max_y' as the nodes, then:
+        # Image Top (y1) -> Scene Y = self.max_y - y1
+        # Image Bottom (y2) -> Scene Y = self.max_y - y2
+        # Height in Scene = (self.max_y - y2) - (self.max_y - y1) = y1 - y2 = world_h
+        # This matches!
+        
+        scene_x = ul_x
+        scene_y = self.max_y - ul_y
+        
+        self.backdrop_item.setPos(scene_x, scene_y)
+        
+        # Now scale. 
+        # We want the image width (img_w) to cover world_w.
+        # We want the image height (img_h) to cover world_h.
+        self.backdrop_item.setScale(scale_x) 
+        # Note: We might need independent x/y scaling if aspect ratio differs
+        self.backdrop_item.setTransform(self.backdrop_item.transform().scale(1, scale_y/scale_x))
+        
+    def clear_backdrop(self):
+        """Remove backdrop image."""
+        if self.backdrop_item:
+            self.removeItem(self.backdrop_item)
+            self.backdrop_item = None
+            
+    def toggle_backdrop(self, visible):
+        """Toggle backdrop visibility."""
+        if self.backdrop_item:
+            self.backdrop_item.setVisible(visible)
+

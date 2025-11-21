@@ -10,8 +10,8 @@ class PropertyEditor(QTableWidget):
     # Emits the object (model instance) after it has been updated
     objectUpdated = Signal(object)
     
-    def __init__(self, project: EPANETProject):
-        super().__init__()
+    def __init__(self, project: EPANETProject, parent=None):
+        super().__init__(parent)
         self.project = project
         self.current_object = None
         

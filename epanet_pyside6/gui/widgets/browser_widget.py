@@ -11,6 +11,7 @@ from .map_browser import MapBrowser
 class ProjectTree(QTreeWidget):
     """Tree widget for browsing network components (internal)."""
     objectActivated = Signal(str, str)
+    objectSelected = Signal(str, str)
     
     def __init__(self, project: EPANETProject):
         super().__init__()
@@ -34,7 +35,7 @@ class ProjectTree(QTreeWidget):
             
             obj_type = self._get_type_from_category(category)
             if obj_type:
-                self.objectActivated.emit(obj_type, object_id)
+                self.objectSelected.emit(obj_type, object_id)
         elif item.parent() and not item.parent().parent():
             # Category item
             object_id = item.text(0)
@@ -43,7 +44,7 @@ class ProjectTree(QTreeWidget):
             
             if category in ("Patterns", "Curves"):
                 obj_type = 'Pattern' if category == "Patterns" else 'Curve'
-                self.objectActivated.emit(obj_type, object_id)
+                self.objectSelected.emit(obj_type, object_id)
 
     def on_item_double_clicked(self, item, column):
         """Handle double-click on item."""
@@ -124,14 +125,16 @@ class BrowserWidget(QTabWidget):
     """Browser widget with Data and Map tabs."""
     
     objectActivated = Signal(str, str)
+    object_selected = Signal(str, str)
     
-    def __init__(self, project: EPANETProject):
-        super().__init__()
+    def __init__(self, project: EPANETProject, parent=None):
+        super().__init__(parent)
         self.project = project
         
         # Data Tab (Tree)
         self.tree = ProjectTree(project)
         self.tree.objectActivated.connect(self.objectActivated)
+        self.tree.objectSelected.connect(self.object_selected)
         self.addTab(self.tree, "Data")
         
         # Map Tab

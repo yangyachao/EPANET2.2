@@ -1,82 +1,96 @@
-"""Overview (mini) map widget that shows full network extent and current view."""
+"""Overview map widget."""
 
 from PySide6.QtWidgets import QGraphicsView
-from PySide6.QtCore import Qt, QTimer, QRectF
-from PySide6.QtGui import QPainter, QPen, QColor
-
+from PySide6.QtCore import Qt, QRectF
+from PySide6.QtGui import QPainter, QPen, QColor, QBrush
 
 class OverviewMapWidget(QGraphicsView):
-    """A small read-only view of the network scene showing current viewport."""
-
-    def __init__(self, main_map_view, parent=None):
+    """Overview map widget showing the full network extent."""
+    
+    def __init__(self, parent=None):
         super().__init__(parent)
-        # Share the same scene so items stay in sync
-        self.setScene(main_map_view.scene)
-        self.main_map_view = main_map_view
-
-        # Make it read-only and compact
-        self.setInteractive(False)
-        self.setDragMode(QGraphicsView.NoDrag)
+        self.main_view = None
+        self.viewport_rect = QRectF()
+        
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setFixedSize(240, 240)
-        self.setRenderHints(self.renderHints() | QPainter.Antialiasing)
-
-        # Periodically refresh the overlay rectangle
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self.update)
-        self._timer.start(200)
-
-    def fit_to_scene(self):
-        rect = self.scene().itemsBoundingRect()
-        if not rect.isNull():
-            # Add small margin
-            margin = 0.05
-            w = rect.width() or 1.0
-            h = rect.height() or 1.0
-            rect = QRectF(rect.x()-w*margin, rect.y()-h*margin, w*(1+2*margin), h*(1+2*margin))
-            self.fitInView(rect, Qt.KeepAspectRatio)
-
+        self.setDragMode(QGraphicsView.NoDrag)
+        
+        # Optimization
+        self.setOptimizationFlag(QGraphicsView.DontSavePainterState)
+        self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+        
+    def set_main_view(self, view):
+        """Set the main map view to track."""
+        self.main_view = view
+        # Handle case where scene is an attribute (shadowing method)
+        if callable(view.scene):
+            self.setScene(view.scene())
+        else:
+            self.setScene(view.scene)
+        
+        # Initial update
+        self.update_extent()
+        
+    def update_extent(self):
+        """Update the overview extent and viewport rectangle."""
+        if not self.main_view or not self.scene():
+            return
+            
+        # Fit the whole scene in this view
+        # We use itemsBoundingRect to ensure we see everything
+        scene_rect = self.scene().itemsBoundingRect()
+        if not scene_rect.isNull():
+            self.fitInView(scene_rect, Qt.KeepAspectRatio)
+        
+        # Calculate the visible rect of the main view in scene coordinates
+        # mapToScene(viewport().rect()) gives a polygon, we take bounding rect
+        self.viewport_rect = self.main_view.mapToScene(self.main_view.viewport().rect()).boundingRect()
+        
+        # Force redraw of foreground
+        self.viewport().update()
+        
+    def drawForeground(self, painter, rect):
+        """Draw the viewport rectangle."""
+        if not self.viewport_rect.isValid():
+            return
+            
+        painter.save()
+        
+        # Draw red rectangle representing main view
+        pen = QPen(QColor(255, 0, 0, 200))
+        pen.setWidth(2)
+        # Scale pen width to remain constant size on screen? 
+        # No, let's keep it simple for now. 
+        # Actually, if we zoom out a lot in overview, 2 pixels might be too thin or thick relative to scene?
+        # Since drawForeground is in scene coords, a fixed width pen will scale with the view.
+        # To have a cosmetic pen (constant screen width), we use setCosmetic(True).
+        pen.setCosmetic(True)
+        
+        painter.setPen(pen)
+        painter.setBrush(QBrush(QColor(255, 0, 0, 50)))
+        painter.drawRect(self.viewport_rect)
+        
+        painter.restore()
+        
     def mousePressEvent(self, event):
-        """Handle clicks on the overview map: center main map on clicked scene point."""
-        try:
-            # Map the click position to scene coordinates
-            scene_pt = self.mapToScene(event.pos())
-            # Center the main map view on this point
-            if hasattr(self, 'main_map_view') and self.main_map_view is not None:
-                self.main_map_view.centerOn(scene_pt)
-        except Exception:
-            pass
-        # Accept the event so parent doesn't try to drag
-        event.accept()
-
-    def drawForeground(self, painter: QPainter, rect: QRectF):
-        """Draw a rectangle showing the main map's current viewport."""
-        try:
-            # Ensure overview is fitted
-            if self.scene() and self.scene().items():
-                # If the overview hasn't been fitted yet, do it once
-                # (fit_to_scene is cheap when scene is empty or unchanged)
-                self.fit_to_scene()
-
-            # Get main view viewport in scene coordinates
-            viewport_rect = self.main_map_view.mapToScene(self.main_map_view.viewport().rect()).boundingRect()
-
-            # Map scene rect to this view's viewport coordinates
-            top_left = self.mapFromScene(viewport_rect.topLeft())
-            bottom_right = self.mapFromScene(viewport_rect.bottomRight())
-
-            x = top_left.x()
-            y = top_left.y()
-            w = bottom_right.x() - x
-            h = bottom_right.y() - y
-
-            pen = QPen(QColor(255, 0, 0, 200))
-            pen.setWidth(2)
-            painter.setPen(pen)
-            painter.setBrush(Qt.NoBrush)
-            painter.drawRect(x, y, w, h)
-
-        except Exception:
-            # Fail silently; overview should never crash main UI
-            pass
+        """Handle mouse press to center main view."""
+        if event.button() == Qt.LeftButton:
+            self._move_main_view(event.pos())
+            
+    def mouseMoveEvent(self, event):
+        """Handle mouse drag to move main view."""
+        if event.buttons() & Qt.LeftButton:
+            self._move_main_view(event.pos())
+            
+    def _move_main_view(self, pos):
+        """Move main view to center on the given position."""
+        if not self.main_view:
+            return
+        
+        # Map pos to scene coords
+        scene_pos = self.mapToScene(pos)
+        self.main_view.centerOn(scene_pos)
+        
+        # Update our rect immediately (though main view signals should also trigger it)
+        self.update_extent()

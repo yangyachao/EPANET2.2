@@ -245,6 +245,29 @@ class MainWindow(QMainWindow):
         
         self.view_menu.addSeparator()
         
+        # Backdrop Submenu
+        backdrop_menu = self.view_menu.addMenu("&Backdrop")
+        
+        load_backdrop_action = QAction("&Load...", self)
+        load_backdrop_action.triggered.connect(self.load_backdrop)
+        backdrop_menu.addAction(load_backdrop_action)
+        
+        unload_backdrop_action = QAction("&Unload", self)
+        unload_backdrop_action.triggered.connect(self.unload_backdrop)
+        backdrop_menu.addAction(unload_backdrop_action)
+        
+        align_backdrop_action = QAction("&Align...", self)
+        align_backdrop_action.triggered.connect(self.align_backdrop)
+        backdrop_menu.addAction(align_backdrop_action)
+        
+        self.show_backdrop_action = QAction("&Show", self)
+        self.show_backdrop_action.setCheckable(True)
+        self.show_backdrop_action.setChecked(True)
+        self.show_backdrop_action.triggered.connect(self.toggle_backdrop)
+        backdrop_menu.addAction(self.show_backdrop_action)
+        
+        self.view_menu.addSeparator()
+        
         # Window Menu
         window_menu = menubar.addMenu("&Window")
         
@@ -318,55 +341,45 @@ class MainWindow(QMainWindow):
         """Create dock widgets."""
         # Browser dock
         self.browser_dock = QDockWidget("Browser", self)
-        self.browser_dock.setObjectName("BrowserDock")
-        self.browser_widget = BrowserWidget(self.project)
+        self.browser_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self.browser_widget = BrowserWidget(self.project, self)
+        self.browser_widget.object_selected.connect(self.on_browser_object_selected)
+        self.browser_widget.objectActivated.connect(self.on_browser_object_activated)
+        
+        # Connect map browser signals
+        self.browser_widget.map_browser.node_parameter_changed.connect(self.on_node_param_changed)
+        self.browser_widget.map_browser.link_parameter_changed.connect(self.on_link_param_changed)
+        self.browser_widget.map_browser.time_changed.connect(self.on_time_changed)
+        
         self.browser_dock.setWidget(self.browser_widget)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.browser_dock)
-        # Connect browser activation signal to handler
-        try:
-            self.browser_widget.objectActivated.connect(self.on_browser_object_activated)
-            # Connect map browser signals
-            self.browser_widget.map_browser.node_parameter_changed.connect(self.on_node_param_changed)
-            self.browser_widget.map_browser.link_parameter_changed.connect(self.on_link_param_changed)
-            self.browser_widget.map_browser.time_changed.connect(self.on_time_changed)
-        except Exception:
-            pass
         
-        # Property editor dock
+        # Property Editor Dock
         self.property_dock = QDockWidget("Property Editor", self)
-        self.property_dock.setObjectName("PropertyDock")
-        self.property_editor = PropertyEditor(self.project)
+        self.property_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self.property_editor = PropertyEditor(self.project, self)
+        self.property_editor.objectUpdated.connect(self.on_property_changed)
         self.property_dock.setWidget(self.property_editor)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.property_dock)
-        # Connect property editor updates to handler so map/browser refresh
-        try:
-            self.property_editor.objectUpdated.connect(self.on_property_object_updated)
-        except Exception:
-            pass
-
-        # Overview (mini) map dock
-        try:
-            self.ovmap_dock = QDockWidget("Overview Map", self)
-            self.ovmap_dock.setObjectName("OVMapDock")
-            self.ovmap_widget = OverviewMapWidget(self.map_widget)
-            self.ovmap_dock.setWidget(self.ovmap_widget)
-            # Put overview dock near the top-right by default
-            self.addDockWidget(Qt.RightDockWidgetArea, self.ovmap_dock)
-            # Add toggle to View menu
-            if hasattr(self, 'view_menu') and self.view_menu is not None:
-                self.view_menu.addAction(self.ovmap_dock.toggleViewAction())
-        except Exception:
-            pass
-
-        # Add toggle actions to View menu so closed docks can be reopened
-        try:
-            if hasattr(self, 'view_menu') and self.view_menu is not None:
-                # toggleViewAction returns a QAction that reflects dock visibility
-                self.view_menu.addAction(self.browser_dock.toggleViewAction())
-                self.view_menu.addAction(self.property_dock.toggleViewAction())
-        except Exception:
-            # Fail silently; view menu may not exist in some initialization orders
-            pass
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.property_dock)
+        
+        # Overview Map Dock
+        from gui.widgets.overview_map import OverviewMapWidget
+        self.overview_dock = QDockWidget("Overview Map", self)
+        self.overview_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self.overview_map = OverviewMapWidget(self)
+        self.overview_map.set_main_view(self.map_widget)
+        self.overview_dock.setWidget(self.overview_map)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.overview_dock)
+        
+        # Connect map view changes to overview
+        self.map_widget.horizontalScrollBar().valueChanged.connect(lambda: self.overview_map.update_extent())
+        self.map_widget.verticalScrollBar().valueChanged.connect(lambda: self.overview_map.update_extent())
+        
+        # Add toggle actions to View menu
+        if hasattr(self, 'view_menu'):
+            self.view_menu.addAction(self.browser_dock.toggleViewAction())
+            self.view_menu.addAction(self.property_dock.toggleViewAction())
+            self.view_menu.addAction(self.overview_dock.toggleViewAction())
     
     def create_status_bar(self):
         """Create status bar."""
@@ -378,6 +391,29 @@ class MainWindow(QMainWindow):
         """Handle selection changes in the map."""
         self.property_editor.set_object(obj)
 
+    def on_browser_object_selected(self, obj_type: str, obj_id: str):
+        """Handle selection from browser widget: select object in property editor."""
+        # Find object in network
+        obj = None
+        if obj_type == 'Node':
+            obj = self.project.network.get_node(obj_id)
+        elif obj_type == 'Link':
+            obj = self.project.network.get_link(obj_id)
+        elif obj_type == 'Pattern':
+            obj = self.project.network.patterns.get(obj_id)
+        elif obj_type == 'Curve':
+            obj = self.project.network.curves.get(obj_id)
+            
+        if obj:
+            self.property_editor.set_object(obj)
+
+    def on_property_changed(self, obj):
+        """Handle property changes from property editor."""
+        # Refresh map to show changes (e.g. coordinates, diameter)
+        self.map_widget.scene.update()
+        # Refresh browser tree if needed (e.g. ID change)
+        # For now, just update map
+        pass
     
     def on_browser_object_activated(self, obj_type: str, obj_id: str):
         """Handle activation from browser widget: select object in property editor and map."""
@@ -1161,6 +1197,47 @@ class MainWindow(QMainWindow):
         else:
             self.map_widget.scene.update_link_colors({}, [], [])
     
+    # Backdrop Handlers
+    
+    def load_backdrop(self):
+        """Load backdrop image."""
+        from gui.dialogs import BackdropDialog
+        
+        dialog = BackdropDialog(self.project, self)
+        if dialog.exec():
+            image_path, ul_x, ul_y, lr_x, lr_y = dialog.get_data()
+            if image_path:
+                self.map_widget.scene.set_backdrop(image_path, ul_x, ul_y, lr_x, lr_y)
+                self.backdrop_info = (image_path, ul_x, ul_y, lr_x, lr_y)
+                self.show_backdrop_action.setChecked(True)
+                
+    def unload_backdrop(self):
+        """Unload backdrop image."""
+        self.map_widget.scene.clear_backdrop()
+        self.backdrop_info = None
+        
+    def align_backdrop(self):
+        """Align backdrop image."""
+        if not hasattr(self, 'backdrop_info') or not self.backdrop_info:
+            QMessageBox.information(self, "Backdrop", "No backdrop loaded.")
+            return
+            
+        from gui.dialogs import BackdropDialog
+        
+        dialog = BackdropDialog(self.project, self)
+        image_path, ul_x, ul_y, lr_x, lr_y = self.backdrop_info
+        dialog.set_data(image_path, ul_x, ul_y, lr_x, lr_y)
+        
+        if dialog.exec():
+            image_path, ul_x, ul_y, lr_x, lr_y = dialog.get_data()
+            if image_path:
+                self.map_widget.scene.set_backdrop(image_path, ul_x, ul_y, lr_x, lr_y)
+                self.backdrop_info = (image_path, ul_x, ul_y, lr_x, lr_y)
+                
+    def toggle_backdrop(self, checked):
+        """Toggle backdrop visibility."""
+        self.map_widget.scene.toggle_backdrop(checked)
+
     # Help
     
     def show_about(self):

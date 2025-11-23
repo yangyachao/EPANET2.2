@@ -1,10 +1,11 @@
 """Main application window."""
 
 from PySide6.QtWidgets import (
-    QMainWindow, QMdiArea, QDockWidget, QToolBar, QStatusBar,
-    QMenuBar, QFileDialog, QMessageBox, QProgressDialog
+    QMainWindow, QMdiArea, QStatusBar, QDockWidget, QTreeWidget, QTreeWidgetItem,
+    QHeaderView, QMenu, QMessageBox, QInputDialog, QFileDialog,
+    QToolBar, QStyle
 )
-from PySide6.QtCore import Qt, QSettings
+from PySide6.QtCore import Qt, QSize, QSettings
 from PySide6.QtGui import QAction, QKeySequence, QColor
 import sys
 import os
@@ -279,6 +280,19 @@ class MainWindow(QMainWindow):
         
         self.view_menu.addSeparator()
         
+        self.view_menu.addSeparator()
+        
+        # Toolbars Submenu
+        toolbars_menu = self.view_menu.addMenu("&Toolbars")
+        
+        # Standard Toolbar Toggle
+        if hasattr(self, 'std_toolbar'):
+            std_toolbar_action = self.std_toolbar.toggleViewAction()
+            std_toolbar_action.setText("Standard")
+            toolbars_menu.addAction(std_toolbar_action)
+        
+        self.view_menu.addSeparator()
+        
         # Map Options
         options_action = QAction("选项", self)
         options_action.triggered.connect(self.show_map_options)
@@ -330,64 +344,77 @@ class MainWindow(QMainWindow):
     def create_toolbars(self):
         """Create toolbars."""
         # Standard toolbar
-        std_toolbar = QToolBar("Standard")
-        std_toolbar.setObjectName("StandardToolbar")
-        self.addToolBar(std_toolbar)
+        self.std_toolbar = QToolBar("Standard")
+        self.std_toolbar.setObjectName("StandardToolbar")
+        self.std_toolbar.setIconSize(QSize(24, 24))
+        self.addToolBar(self.std_toolbar)
         
-        new_action = QAction("New", self)
+        # File Actions
+        new_action = QAction(self.style().standardIcon(QStyle.SP_FileIcon), "New", self)
         new_action.triggered.connect(self.new_project)
-        std_toolbar.addAction(new_action)
+        self.std_toolbar.addAction(new_action)
         
-        open_action = QAction("Open", self)
+        open_action = QAction(self.style().standardIcon(QStyle.SP_DialogOpenButton), "Open", self)
         open_action.triggered.connect(self.open_project)
-        std_toolbar.addAction(open_action)
+        self.std_toolbar.addAction(open_action)
         
-        save_action = QAction("Save", self)
+        save_action = QAction(self.style().standardIcon(QStyle.SP_DialogSaveButton), "Save", self)
         save_action.triggered.connect(self.save_project)
-        std_toolbar.addAction(save_action)
+        self.std_toolbar.addAction(save_action)
         
-        std_toolbar.addSeparator()
+        self.std_toolbar.addSeparator()
         
         # View modes
-        std_toolbar.addAction(self.select_action)
-        std_toolbar.addAction(self.pan_action)
+        # Select (Arrow)
+        self.select_action.setIcon(self.style().standardIcon(QStyle.SP_ArrowUp))
+        self.select_action.setText("Select")
+        self.std_toolbar.addAction(self.select_action)
         
-        std_toolbar.addSeparator()
+        # Pan
+        self.pan_action.setIcon(self.style().standardIcon(QStyle.SP_ToolBarHorizontalExtensionButton))
+        self.pan_action.setText("Pan")
+        self.std_toolbar.addAction(self.pan_action)
         
-        run_action = QAction("Run", self)
+        self.std_toolbar.addSeparator()
+        
+        # Run
+        run_action = QAction(self.style().standardIcon(QStyle.SP_MediaPlay), "Run", self)
         run_action.triggered.connect(self.run_simulation)
-        std_toolbar.addAction(run_action)
+        self.std_toolbar.addAction(run_action)
         
-        std_toolbar.addSeparator()
+        self.std_toolbar.addSeparator()
         
-        graph_action = QAction("Graph", self)
+        # Reporting
+        graph_action = QAction(self.style().standardIcon(QStyle.SP_FileDialogListView), "Graph", self)
         graph_action.triggered.connect(self.create_graph)
-        std_toolbar.addAction(graph_action)
+        self.std_toolbar.addAction(graph_action)
         
-        table_action = QAction("Table", self)
+        table_action = QAction(self.style().standardIcon(QStyle.SP_FileDialogDetailedView), "Table", self)
         table_action.triggered.connect(self.create_table)
-        std_toolbar.addAction(table_action)
+        self.std_toolbar.addAction(table_action)
         
-        contour_action = QAction("Contour", self)
+        # Others (keep text or find icons)
+        contour_action = QAction("Contour", self) # No good icon
         contour_action.triggered.connect(self.create_contour)
-        std_toolbar.addAction(contour_action)
+        self.std_toolbar.addAction(contour_action)
         
-        status_action = QAction("Status", self)
+        status_action = QAction(self.style().standardIcon(QStyle.SP_MessageBoxInformation), "Status", self)
         status_action.triggered.connect(self.create_status)
-        std_toolbar.addAction(status_action)
+        self.std_toolbar.addAction(status_action)
         
         calib_action = QAction("Calibration", self)
         calib_action.triggered.connect(self.create_calibration)
-        std_toolbar.addAction(calib_action)
+        self.std_toolbar.addAction(calib_action)
         
         energy_action = QAction("Energy", self)
         energy_action.triggered.connect(self.create_energy)
-        std_toolbar.addAction(energy_action)
+        self.std_toolbar.addAction(energy_action)
     
     def create_dock_widgets(self):
         """Create dock widgets."""
         # Browser dock
         self.browser_dock = QDockWidget("Browser", self)
+        self.browser_dock.setObjectName("BrowserDock")
         self.browser_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         self.browser_widget = BrowserWidget(self.project, self)
         self.browser_widget.object_selected.connect(self.on_browser_object_selected)
@@ -403,6 +430,7 @@ class MainWindow(QMainWindow):
         
         # Property Editor Dock
         self.property_dock = QDockWidget("Property Editor", self)
+        self.property_dock.setObjectName("PropertyDock")
         self.property_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         self.property_editor = PropertyEditor(self.project, self)
         self.property_editor.objectUpdated.connect(self.on_property_changed)
@@ -412,6 +440,7 @@ class MainWindow(QMainWindow):
         # Overview Map Dock
         from gui.widgets.overview_map import OverviewMapWidget
         self.overview_dock = QDockWidget("Overview Map", self)
+        self.overview_dock.setObjectName("OverviewDock")
         self.overview_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
         self.overview_map = OverviewMapWidget(self)
         self.overview_map.set_main_view(self.map_widget)
@@ -767,30 +796,34 @@ class MainWindow(QMainWindow):
     def create_graph(self):
         """Create a new graph window."""
         from gui.views import GraphView
-        from core.constants import NodeType, LinkType
+        from gui.dialogs.graph_selection_dialog import GraphSelectionDialog
         
-        # Get selected object from property editor or map
-        # For now, we'll use the property editor's current object
-        obj = self.property_editor.current_object
+        # Open selection dialog
+        dialog = GraphSelectionDialog(self.project, self)
         
-        if not obj:
-            QMessageBox.warning(self, "Graph", "Please select a node or link first.")
-            return
+        # Pre-select current object if available (optional enhancement for later)
+        # For now, just open dialog
+        
+        if dialog.exec():
+            selection = dialog.get_selection()
             
-        # Determine type
-        if hasattr(obj, 'node_type'):
-            obj_type = 'Node'
-        elif hasattr(obj, 'link_type'):
-            obj_type = 'Link'
-        else:
-            return
-            
-        graph_view = GraphView(self.project)
-        graph_view.set_object(obj_type, obj.id)
-        
-        subwindow = self.mdi_area.addSubWindow(graph_view)
-        subwindow.setWindowTitle(f"Graph - {obj_type} {obj.id}")
-        subwindow.showMaximized()
+            if selection['graph_type'] == "Time Series":
+                if not selection['objects']:
+                    QMessageBox.warning(self, "Graph", "Please select at least one object.")
+                    return
+                    
+                graph_view = GraphView(self.project)
+                graph_view.set_data(
+                    selection['object_type'], 
+                    selection['objects'], 
+                    selection['parameter']
+                )
+                
+                subwindow = self.mdi_area.addSubWindow(graph_view)
+                subwindow.setWindowTitle(f"Graph - {selection['parameter'].name}")
+                subwindow.showMaximized()
+            else:
+                QMessageBox.information(self, "Graph", f"{selection['graph_type']} not implemented yet.")
         
     def create_table(self):
         """Create a new table window."""

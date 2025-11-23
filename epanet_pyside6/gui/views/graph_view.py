@@ -46,22 +46,27 @@ class GraphView(QWidget):
         self.plot_widget.setLabel('bottom', 'Time (hours)')
         layout.addWidget(self.plot_widget)
         
-    def set_object(self, obj_type, obj_id):
-        """Set the object to plot."""
+    def set_data(self, obj_type, obj_ids, param):
+        """Set the data to plot."""
         self.object_type = obj_type
-        self.object_id = obj_id
+        self.object_ids = obj_ids if isinstance(obj_ids, list) else [obj_ids]
         
         # Update parameter combo
         self.param_combo.blockSignals(True)
         self.param_combo.clear()
         
         if obj_type == 'Node':
-            for param in NodeParam:
-                self.param_combo.addItem(param.name, param)
+            for p in NodeParam:
+                self.param_combo.addItem(p.name, p)
         elif obj_type == 'Link':
-            for param in LinkParam:
-                self.param_combo.addItem(param.name, param)
+            for p in LinkParam:
+                self.param_combo.addItem(p.name, p)
                 
+        # Select current parameter
+        index = self.param_combo.findData(param)
+        if index >= 0:
+            self.param_combo.setCurrentIndex(index)
+            
         self.param_combo.blockSignals(False)
         
         # Refresh
@@ -70,27 +75,29 @@ class GraphView(QWidget):
     def refresh_plot(self):
         """Refresh the plot data."""
         self.plot_widget.clear()
+        self.plot_widget.addLegend()
         
         if not self.project.has_results():
             self.plot_widget.setTitle("No simulation results available")
             return
             
-        if not self.object_id:
+        if not self.object_ids:
             return
             
         param = self.param_combo.currentData()
         if not param:
             return
             
-        # Fetch data from engine
-        # We need to implement a method in engine/project to get time series
-        # For now, we'll try to get it from the results object directly via engine
-        
         try:
-            times, values = self.project.get_time_series(self.object_type, self.object_id, param)
+            # Color cycle for multiple lines
+            colors = ['b', 'r', 'g', 'c', 'm', 'y', 'k']
             
-            self.plot_widget.plot(times, values, pen=pg.mkPen(color='b', width=2))
-            self.plot_widget.setTitle(f"{self.object_type} {self.object_id} - {param.name}")
+            for i, obj_id in enumerate(self.object_ids):
+                times, values = self.project.get_time_series(self.object_type, obj_id, param)
+                color = colors[i % len(colors)]
+                self.plot_widget.plot(times, values, pen=pg.mkPen(color=color, width=2), name=f"{obj_id}")
+            
+            self.plot_widget.setTitle(f"{self.object_type} {param.name}")
             self.plot_widget.setLabel('left', param.name)
             
         except Exception as e:
@@ -98,7 +105,7 @@ class GraphView(QWidget):
 
     def export_data(self):
         """Export graph data to CSV."""
-        if not self.object_id:
+        if not self.object_ids:
             return
             
         param = self.param_combo.currentData()
@@ -113,14 +120,33 @@ class GraphView(QWidget):
             return
             
         try:
-            times, values = self.project.get_time_series(self.object_type, self.object_id, param)
-            
             import csv
             with open(filename, 'w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(["Time (hours)", param.name])
-                for t, v in zip(times, values):
-                    writer.writerow([t, v])
+                
+                # Header
+                header = ["Time (hours)"]
+                for obj_id in self.object_ids:
+                    header.append(f"{obj_id} - {param.name}")
+                writer.writerow(header)
+                
+                # Data
+                # Get data for all objects
+                all_data = []
+                times = None
+                for obj_id in self.object_ids:
+                    t, v = self.project.get_time_series(self.object_type, obj_id, param)
+                    if times is None:
+                        times = t
+                    all_data.append(v)
+                
+                # Write rows
+                if times is not None:
+                    for i, t in enumerate(times):
+                        row = [t]
+                        for data in all_data:
+                            row.append(data[i] if i < len(data) else "")
+                        writer.writerow(row)
                     
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox

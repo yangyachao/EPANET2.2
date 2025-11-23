@@ -30,6 +30,7 @@ class MapWidget(QGraphicsView):
         
     def set_interaction_mode(self, mode: str):
         """Set interaction mode (select, pan)."""
+        print(f"DEBUG: MapWidget.set_interaction_mode called with {mode}")
         if mode == 'pan':
             self.setDragMode(QGraphicsView.ScrollHandDrag)
             self.setCursor(Qt.OpenHandCursor)
@@ -39,6 +40,10 @@ class MapWidget(QGraphicsView):
         else:
             self.setDragMode(QGraphicsView.NoDrag)
             self.setCursor(Qt.ArrowCursor)
+            
+    def mousePressEvent(self, event):
+        print(f"DEBUG: MapWidget.mousePressEvent. DragMode: {self.dragMode()}")
+        super().mousePressEvent(event)
 
     def fit_network(self):
         """Fit the view to the network extent."""

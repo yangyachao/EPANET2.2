@@ -24,7 +24,7 @@ class MapOptionsDialog(QDialog):
         
     def setup_ui(self):
         """Setup UI components."""
-        layout = QHBoxLayout(self)
+        layout = QHBoxLayout()  # Removed self to allow nesting
         
         # Left side: Category list
         self.category_list = QListWidget()
@@ -443,48 +443,65 @@ class MapOptionsDialog(QDialog):
         
     def get_options(self):
         """Get current options from dialog."""
-        return {
-            # Nodes
-            'node_size': self.node_size_spin.value(),
-            'size_nodes_by_value': self.size_nodes_by_value.isChecked(),
-            'display_node_border': self.display_node_border.isChecked(),
-            'display_junction_symbols': self.display_junction_symbols.isChecked(),
-            
-            # Links
-            'link_size': self.link_size_spin.value(),
-            'size_links_by_value': self.size_links_by_value.isChecked(),
-            'display_link_border': self.display_link_border.isChecked(),
-            'arrow_style': self.arrow_style_group.checkedId(),
-            'arrow_size': self.arrow_size_spin.value(),
-            
-            # Labels
-            'display_labels': self.display_labels.isChecked(),
-            'labels_transparent': self.labels_transparent.isChecked(),
-            'label_zoom': self.label_zoom_spin.value(),
-            
-            # Notation
-            'display_node_ids': self.display_node_ids.isChecked(),
-            'display_node_values': self.display_node_values.isChecked(),
-            'display_link_ids': self.display_link_ids.isChecked(),
-            'display_link_values': self.display_link_values.isChecked(),
-            'notation_transparent': self.notation_transparent.isChecked(),
-            'notation_font_size': self.notation_font_size.value(),
-            'notation_zoom': self.notation_zoom_spin.value(),
-            
-            # Symbols
-            'display_tank_symbols': self.display_tank_symbols.isChecked(),
-            'display_pump_symbols': self.display_pump_symbols.isChecked(),
-            'display_valve_symbols': self.display_valve_symbols.isChecked(),
-            'display_emitter_symbols': self.display_emitter_symbols.isChecked(),
-            'display_source_symbols': self.display_source_symbols.isChecked(),
-            'symbol_zoom': self.symbol_zoom_spin.value(),
-            
-            # Background
-            'background_color_index': self.bg_color_group.checkedId()
-        }
+        print("DEBUG: MapOptionsDialog.get_options called")
+        try:
+            options = {
+                # Nodes
+                'node_size': self.node_size_spin.value(),
+                'size_nodes_by_value': self.size_nodes_by_value.isChecked(),
+                'display_node_border': self.display_node_border.isChecked(),
+                'display_junction_symbols': self.display_junction_symbols.isChecked(),
+                
+                # Links
+                'link_size': self.link_size_spin.value(),
+                'size_links_by_value': self.size_links_by_value.isChecked(),
+                'display_link_border': self.display_link_border.isChecked(),
+                'arrow_style': self.arrow_style_group.checkedId(),
+                'arrow_size': self.arrow_size_spin.value(),
+                
+                # Labels
+                'display_labels': self.display_labels.isChecked(),
+                'labels_transparent': self.labels_transparent.isChecked(),
+                'label_zoom': self.label_zoom_spin.value(),
+                
+                # Notation
+                'display_node_ids': self.display_node_ids.isChecked(),
+                'display_node_values': self.display_node_values.isChecked(),
+                'display_link_ids': self.display_link_ids.isChecked(),
+                'display_link_values': self.display_link_values.isChecked(),
+                'notation_transparent': self.notation_transparent.isChecked(),
+                'notation_font_size': self.notation_font_size.value(),
+                'notation_zoom': self.notation_zoom_spin.value(),
+                
+                # Symbols
+                'display_tank_symbols': self.display_tank_symbols.isChecked(),
+                'display_pump_symbols': self.display_pump_symbols.isChecked(),
+                'display_valve_symbols': self.display_valve_symbols.isChecked(),
+                'display_emitter_symbols': self.display_emitter_symbols.isChecked(),
+                'display_source_symbols': self.display_source_symbols.isChecked(),
+                'symbol_zoom': self.symbol_zoom_spin.value(),
+                
+                # Background
+                'background_color_index': self.bg_color_group.checkedId()
+            }
+            print(f"DEBUG: get_options returning: {options}")
+            return options
+        except Exception as e:
+            print(f"DEBUG: Error in get_options: {e}")
+            import traceback
+            traceback.print_exc()
+            return {}
         
     def accept(self):
         """Save options and close dialog."""
-        options = self.get_options()
-        self.options_updated.emit(options)
-        super().accept()
+        print("DEBUG: MapOptionsDialog.accept called")
+        try:
+            options = self.get_options()
+            print("DEBUG: Emitting options_updated signal")
+            self.options_updated.emit(options)
+            print("DEBUG: Calling super().accept()")
+            super().accept()
+        except Exception as e:
+            print(f"DEBUG: Error in accept: {e}")
+            import traceback
+            traceback.print_exc()

@@ -306,4 +306,167 @@ class NetworkScene(QGraphicsScene):
         """Toggle backdrop visibility."""
         if self.backdrop_item:
             self.backdrop_item.setVisible(visible)
+    
+    def apply_map_options(self, options):
+        """Apply map display options to the scene."""
+        print(f"DEBUG: NetworkScene.apply_map_options called. Options: {options}")
+        if not options:
+            print("DEBUG: Options empty")
+            return
+        
+        # Apply node options
+        node_size = options.get('node_size', 3)
+        display_node_border = options.get('display_node_border', True)
+        display_node_ids = options.get('display_node_ids', False)
+        display_node_values = options.get('display_node_values', False)
+        notation_font_size = options.get('notation_font_size', 8)
+        
+        print(f"DEBUG: Applying node_size={node_size}, display_node_border={display_node_border}")
+        print(f"DEBUG: display_node_ids={display_node_ids}, display_node_values={display_node_values}")
+        print(f"DEBUG: Node items count: {len(self.node_items)}")
+        
+        for node_id, item in self.node_items.items():
+            # Update node size (scale the radius)
+            # Base radius is 1.0 * item.scale (from __init__)
+            # Default node_size is 3
+            if hasattr(item, 'scale'):
+                base_radius = 1.0 * item.scale
+                scaled_radius = base_radius * (node_size / 3.0)
+                item.setRect(-scaled_radius, -scaled_radius, scaled_radius*2, scaled_radius*2)
+                item.radius = scaled_radius # Update radius property for label positioning
+            
+            # Update border visibility
+            if display_node_border:
+                pen = item.pen()
+                # Border width proportional to size
+                if hasattr(item, 'scale'):
+                    pen.setWidthF(0.05 * item.scale * (node_size / 3.0))
+                else:
+                    pen.setWidthF(0.05)
+                item.setPen(pen)
+            else:
+                item.setPen(QPen(Qt.NoPen))
+                
+            # Update ID label
+            if hasattr(item, 'id_label'):
+                item.id_label.setVisible(display_node_ids)
+                if display_node_ids:
+                    print(f"DEBUG: Setting node {node_id} ID label visible. Pos: {item.id_label.pos()}")
+                
+                # Scale font size based on item scale
+                # Use a high-res base font and scale the item
+                base_font_size = 48
+                font = item.id_label.font()
+                font.setPixelSize(base_font_size) # Use pixel size for consistent base
+                item.id_label.setFont(font)
+                
+                if hasattr(item, 'scale'):
+                    # Target height = item.scale * (notation_font_size / 4.0)
+                    # Scale factor = target_height / base_font_size
+                    # notation_font_size 8 -> factor 2.0 relative to scale
+                    target_height = item.scale * (notation_font_size / 4.0)
+                    # Ensure minimum visibility? No, let it scale.
+                    scale_factor = target_height / base_font_size
+                    item.id_label.setScale(scale_factor)
+                else:
+                    item.id_label.setScale(1.0)
+            
+            # Update Value label
+            if hasattr(item, 'value_label'):
+                item.value_label.setVisible(display_node_values)
+                # TODO: Set actual value text based on current time step
+                item.value_label.setText("0.00") 
+                
+                base_font_size = 48
+                font = item.value_label.font()
+                font.setPixelSize(base_font_size)
+                item.value_label.setFont(font)
+                
+                if hasattr(item, 'scale'):
+                    target_height = item.scale * (notation_font_size / 4.0)
+                    scale_factor = target_height / base_font_size
+                    item.value_label.setScale(scale_factor)
+                else:
+                    item.value_label.setScale(1.0)
+                
+            # Update label positions
+            if hasattr(item, 'update_label_positions'):
+                item.update_label_positions()
+        
+        # Apply link options
+        link_size = options.get('link_size', 2)
+        display_link_border = options.get('display_link_border', False)
+        display_link_ids = options.get('display_link_ids', False)
+        display_link_values = options.get('display_link_values', False)
+        
+        print(f"DEBUG: display_link_ids={display_link_ids}, display_link_values={display_link_values}")
+        
+        for link_id, item in self.link_items.items():
+            # Update link width
+            pen = item.pen()
+            # Base width is 0.5 * item.scale (from __init__)
+            # Default link_size is 2
+            if hasattr(item, 'scale'):
+                # 0.5 * scale is default for size 2
+                # So factor is link_size / 2.0
+                width = (0.5 * item.scale) * (link_size / 2.0)
+                pen.setWidthF(width)
+            else:
+                pen.setWidthF(0.1 * link_size / 2.0)
+            item.setPen(pen)
+            
+            # Update ID label
+            if hasattr(item, 'id_label'):
+                item.id_label.setVisible(display_link_ids)
+                if display_link_ids:
+                    print(f"DEBUG: Setting link {link_id} ID label visible")
+                
+                base_font_size = 48
+                font = item.id_label.font()
+                font.setPixelSize(base_font_size)
+                item.id_label.setFont(font)
+                
+                if hasattr(item, 'scale'):
+                    target_height = item.scale * (notation_font_size / 4.0)
+                    scale_factor = target_height / base_font_size
+                    item.id_label.setScale(scale_factor)
+                else:
+                    item.id_label.setScale(1.0)
+                
+            # Update Value label
+            if hasattr(item, 'value_label'):
+                item.value_label.setVisible(display_link_values)
+                # TODO: Set actual value text based on current time step
+                item.value_label.setText("0.00")
+                
+                base_font_size = 48
+                font = item.value_label.font()
+                font.setPixelSize(base_font_size)
+                item.value_label.setFont(font)
+                
+                if hasattr(item, 'scale'):
+                    target_height = item.scale * (notation_font_size / 4.0)
+                    scale_factor = target_height / base_font_size
+                    item.value_label.setScale(scale_factor)
+                else:
+                    item.value_label.setScale(1.0)
+                
+            # Update label positions
+                
+            # Update Value label
+            if hasattr(item, 'value_label'):
+                item.value_label.setVisible(display_link_values)
+                # TODO: Set actual value text based on current time step
+                item.value_label.setText("0.00")
+                font = item.value_label.font()
+                font.setPointSize(notation_font_size)
+                item.value_label.setFont(font)
+                
+            # Update label positions
+            if hasattr(item, 'update_label_positions'):
+                item.update_label_positions()
+        
+        # Update the scene
+        self.update()
+
 

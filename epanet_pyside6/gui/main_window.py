@@ -930,18 +930,55 @@ class MainWindow(QMainWindow):
         from gui.dialogs.map_options_dialog import MapOptionsDialog
         dialog = MapOptionsDialog(self)
         
+        # Initialize default options if not set
+        if not hasattr(self.project, 'map_options'):
+            self.project.map_options = {
+                'node_size': 3,
+                'size_nodes_by_value': False,
+                'display_node_border': True,
+                'display_junction_symbols': True,
+                'link_size': 2,
+                'size_links_by_value': False,
+                'display_link_border': False,
+                'arrow_style': 0,
+                'arrow_size': 5,
+                'display_labels': True,
+                'labels_transparent': False,
+                'label_zoom': 0,
+                'display_node_ids': False,
+                'display_node_values': False,
+                'display_link_ids': False,
+                'display_link_values': False,
+                'notation_transparent': False,
+                'notation_font_size': 8,
+                'notation_zoom': 0,
+                'display_tank_symbols': True,
+                'display_pump_symbols': True,
+                'display_valve_symbols': True,
+                'display_emitter_symbols': True,
+                'display_source_symbols': True,
+                'symbol_zoom': 0,
+                'background_color_index': 0
+            }
+        
         # Load current options
-        current_options = getattr(self.project, 'map_options', {})
-        dialog.load_options(current_options)
+        dialog.load_options(self.project.map_options)
         
         # Connect signal to update options
         def on_options_updated(new_options):
+            print(f"DEBUG: on_options_updated called with: {new_options}")
             self.project.map_options = new_options
-            # TODO: Apply options to network view
-            self.status_bar.showMessage("Map options updated")
+            # Apply options to network view
+            if hasattr(self, 'map_widget') and hasattr(self.map_widget, 'scene'):
+                print("DEBUG: Calling scene.apply_map_options")
+                self.map_widget.scene.apply_map_options(new_options)
+            else:
+                print("DEBUG: map_widget or scene not found")
+            self.status_bar.showMessage("地图选项已更新")
         
         dialog.options_updated.connect(on_options_updated)
         dialog.exec()
+
     
     # View operations
     

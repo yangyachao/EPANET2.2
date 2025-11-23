@@ -1,8 +1,8 @@
 """Graphics items for EPANET network components."""
 
-from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsItem, QGraphicsDropShadowEffect
+from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsItem, QGraphicsDropShadowEffect, QGraphicsSimpleTextItem
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPainter
+from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPainter, QFont
 
 class NodeItem(QGraphicsEllipseItem):
     """Base class for node graphics items."""
@@ -34,6 +34,40 @@ class NodeItem(QGraphicsEllipseItem):
         self.shadow.setBlurRadius(0.2 * scale)
         self.shadow.setOffset(0, 0)
         self.shadow.setColor(QColor(255, 0, 0, 200))
+        
+        # Text labels
+        self.id_label = QGraphicsSimpleTextItem(self.node.id, self)
+        self.id_label.setBrush(QBrush(Qt.black))
+        self.id_label.setFont(QFont("Arial", 8))
+        self.id_label.setVisible(False)
+        
+        self.value_label = QGraphicsSimpleTextItem("", self)
+        self.value_label.setBrush(QBrush(Qt.black))
+        self.value_label.setFont(QFont("Arial", 8))
+        self.value_label.setVisible(False)
+        
+        # Position labels
+        self.update_label_positions()
+
+    def update_label_positions(self):
+        """Update positions of text labels."""
+        r = self.radius
+        
+        # ID label above node
+        id_scale = self.id_label.scale()
+        id_rect = self.id_label.boundingRect()
+        self.id_label.setPos(
+            -id_rect.width() * id_scale / 2, 
+            -r - (id_rect.height() * id_scale) - (2 * self.scale)
+        )
+        
+        # Value label below node
+        val_scale = self.value_label.scale()
+        val_rect = self.value_label.boundingRect()
+        self.value_label.setPos(
+            -val_rect.width() * val_scale / 2, 
+            r + (2 * self.scale)
+        )
 
     def hoverEnterEvent(self, event):
         """Change cursor to pointing hand when hovering."""
@@ -117,6 +151,17 @@ class LinkItem(QGraphicsPathItem):
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         self.setAcceptHoverEvents(True)
         
+        # Text labels
+        self.id_label = QGraphicsSimpleTextItem(self.link.id, self)
+        self.id_label.setBrush(QBrush(Qt.black))
+        self.id_label.setFont(QFont("Arial", 8))
+        self.id_label.setVisible(False)
+        
+        self.value_label = QGraphicsSimpleTextItem("", self)
+        self.value_label.setBrush(QBrush(Qt.black))
+        self.value_label.setFont(QFont("Arial", 8))
+        self.value_label.setVisible(False)
+        
         self.update_path()
         
         # Default style - much thicker lines (5x)
@@ -128,6 +173,38 @@ class LinkItem(QGraphicsPathItem):
         self.shadow.setBlurRadius(0.2 * scale)
         self.shadow.setOffset(0, 0)
         self.shadow.setColor(QColor(255, 0, 0, 220))
+        
+        # Position labels
+        self.update_label_positions()
+
+    def update_label_positions(self):
+        """Update positions of text labels."""
+        # Position at midpoint of the link
+        path = self.path()
+        if path.elementCount() > 0:
+            mid_point = path.pointAtPercent(0.5)
+            # Convert scene point to local coordinates if needed, but since LinkItem is a PathItem, 
+            # its local coordinates match the path definition.
+            # However, QGraphicsPathItem's origin is (0,0) usually.
+            # Let's just use the midpoint of the bounding rect for simplicity or calculate from path.
+            
+            # Actually, for QGraphicsPathItem, the path is in local coordinates.
+            
+            # ID label slightly above midpoint
+            id_scale = self.id_label.scale()
+            id_rect = self.id_label.boundingRect()
+            self.id_label.setPos(
+                mid_point.x() - (id_rect.width() * id_scale / 2), 
+                mid_point.y() - (id_rect.height() * id_scale) - (5 * self.scale)
+            )
+            
+            # Value label slightly below midpoint
+            val_scale = self.value_label.scale()
+            val_rect = self.value_label.boundingRect()
+            self.value_label.setPos(
+                mid_point.x() - (val_rect.width() * val_scale / 2), 
+                mid_point.y() + (5 * self.scale)
+            )
 
     def hoverEnterEvent(self, event):
         """Change cursor to pointing hand when hovering."""
@@ -174,6 +251,7 @@ class LinkItem(QGraphicsPathItem):
         path.moveTo(self.from_pos)
         path.lineTo(self.to_pos)
         self.setPath(path)
+        self.update_label_positions()
 
 class PipeItem(LinkItem):
     """Graphics item for Pipe."""

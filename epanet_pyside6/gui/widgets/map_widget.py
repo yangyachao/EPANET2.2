@@ -27,6 +27,18 @@ class MapWidget(QGraphicsView):
         
         # Initial fit
         self.fit_network()
+        
+    def set_interaction_mode(self, mode: str):
+        """Set interaction mode (select, pan)."""
+        if mode == 'pan':
+            self.setDragMode(QGraphicsView.ScrollHandDrag)
+            self.setCursor(Qt.OpenHandCursor)
+        elif mode == 'select':
+            self.setDragMode(QGraphicsView.RubberBandDrag)
+            self.setCursor(Qt.ArrowCursor)
+        else:
+            self.setDragMode(QGraphicsView.NoDrag)
+            self.setCursor(Qt.ArrowCursor)
 
     def fit_network(self):
         """Fit the view to the network extent."""

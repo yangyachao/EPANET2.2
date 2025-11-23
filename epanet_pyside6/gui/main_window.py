@@ -205,6 +205,16 @@ class MainWindow(QMainWindow):
         # Project Menu
         project_menu = menubar.addMenu("&Project")
         
+        summary_action = QAction("&Summary...", self)
+        summary_action.triggered.connect(self.show_project_summary)
+        project_menu.addAction(summary_action)
+        
+        calibration_action = QAction("&Calibration Data...", self)
+        calibration_action.triggered.connect(self.show_calibration_data)
+        project_menu.addAction(calibration_action)
+        
+        project_menu.addSeparator()
+        
         analysis_options_action = QAction("Analysis &Options...", self)
         analysis_options_action.triggered.connect(self.show_analysis_options)
         project_menu.addAction(analysis_options_action)
@@ -223,6 +233,20 @@ class MainWindow(QMainWindow):
         # View Menu
         self.view_menu = menubar.addMenu("&View")
         
+        # Pan/Select modes
+        self.select_action = QAction("&Select", self)
+        self.select_action.setCheckable(True)
+        self.select_action.setChecked(True) # Default
+        self.select_action.triggered.connect(lambda: self.set_interaction_mode('select'))
+        self.view_menu.addAction(self.select_action)
+        
+        self.pan_action = QAction("&Pan", self)
+        self.pan_action.setCheckable(True)
+        self.pan_action.triggered.connect(lambda: self.set_interaction_mode('pan'))
+        self.view_menu.addAction(self.pan_action)
+        
+        self.view_menu.addSeparator()
+        
         # Zoom controls
         zoom_in_action = QAction("Zoom &In", self)
         zoom_in_action.setShortcut("+")
@@ -238,6 +262,12 @@ class MainWindow(QMainWindow):
         full_extent_action.setShortcut("Home")
         full_extent_action.triggered.connect(self.full_extent)
         self.view_menu.addAction(full_extent_action)
+        
+        self.view_menu.addSeparator()
+        
+        dimensions_action = QAction("&Dimensions...", self)
+        dimensions_action.triggered.connect(self.show_dimensions)
+        self.view_menu.addAction(dimensions_action)
         
         self.view_menu.addSeparator()
         
@@ -315,6 +345,12 @@ class MainWindow(QMainWindow):
         save_action = QAction("Save", self)
         save_action.triggered.connect(self.save_project)
         std_toolbar.addAction(save_action)
+        
+        std_toolbar.addSeparator()
+        
+        # View modes
+        std_toolbar.addAction(self.select_action)
+        std_toolbar.addAction(self.pan_action)
         
         std_toolbar.addSeparator()
         
@@ -909,6 +945,55 @@ class MainWindow(QMainWindow):
         dialog.curve_updated.connect(on_curve_updated)
         dialog.exec()
     
+    def show_project_summary(self):
+        """Show project summary dialog."""
+        from gui.dialogs.project_summary_dialog import ProjectSummaryDialog
+        
+        # Get current title and notes
+        title = self.project.network.title
+        notes = self.project.network.notes
+        
+        dialog = ProjectSummaryDialog(self, title, notes)
+        if dialog.exec():
+            data = dialog.get_data()
+            self.project.network.title = data['title']
+            self.project.network.notes = data['notes']
+            self.project.modified = True
+            self.status_bar.showMessage("Project summary updated")
+
+    def show_calibration_data(self):
+        """Show calibration data dialog."""
+        from gui.dialogs.calibration_data_dialog import CalibrationDataDialog
+        
+        current_data = self.project.network.calibration_data
+        
+        dialog = CalibrationDataDialog(self, current_data)
+        if dialog.exec():
+            new_data = dialog.get_data()
+            self.project.network.calibration_data = new_data
+            self.project.modified = True
+            self.status_bar.showMessage("Calibration data updated")
+
+    def show_dimensions(self):
+        """Show dimensions dialog."""
+        from gui.dialogs.dimensions_dialog import DimensionsDialog
+        
+        current_bounds = self.project.network.map_bounds
+        current_units = self.project.network.map_units
+        
+        dialog = DimensionsDialog(self, current_bounds, current_units)
+        if dialog.exec():
+            data = dialog.get_data()
+            self.project.network.map_bounds = data['bounds']
+            self.project.network.map_units = data['units']
+            self.project.modified = True
+            
+            # Update scene
+            self.map_widget.scene.update_scene_rect()
+            self.map_widget.fit_network()
+            
+            self.status_bar.showMessage("Map dimensions updated")
+
     def show_analysis_options(self):
         """Show analysis options dialog."""
         from gui.dialogs.analysis_options_dialog import AnalysisOptionsDialog
@@ -944,40 +1029,42 @@ class MainWindow(QMainWindow):
                 'arrow_size': 5,
                 'display_labels': True,
                 'labels_transparent': False,
-                'label_zoom': 0,
+                'label_zoom': 100,
                 'display_node_ids': False,
                 'display_node_values': False,
                 'display_link_ids': False,
                 'display_link_values': False,
                 'notation_transparent': False,
                 'notation_font_size': 8,
-                'notation_zoom': 0,
-                'display_tank_symbols': True,
-                'display_pump_symbols': True,
-                'display_valve_symbols': True,
-                'display_emitter_symbols': True,
-                'display_source_symbols': True,
-                'symbol_zoom': 0,
-                'background_color_index': 0
+                'notation_zoom': 100,
+                'display_tanks': True,
+                'display_pumps': True,
+                'display_valves': True,
+                'display_emitters': True,
+                'display_sources': True,
+                'symbol_zoom': 100,
+                'background_color': '#FFFFFF'
             }
-        
-        # Load current options
+    
         dialog.load_options(self.project.map_options)
         
         # Connect signal to update options
         def on_options_updated(new_options):
-            print(f"DEBUG: on_options_updated called with: {new_options}")
             self.project.map_options = new_options
-            # Apply options to network view
-            if hasattr(self, 'map_widget') and hasattr(self.map_widget, 'scene'):
-                print("DEBUG: Calling scene.apply_map_options")
-                self.map_widget.scene.apply_map_options(new_options)
-            else:
-                print("DEBUG: map_widget or scene not found")
-            self.status_bar.showMessage("地图选项已更新")
+            self.map_widget.scene.apply_map_options(new_options)
+            self.status_bar.showMessage("Map options updated")
         
         dialog.options_updated.connect(on_options_updated)
         dialog.exec()
+
+
+    def set_interaction_mode(self, mode: str):
+        """Set map interaction mode."""
+        self.map_widget.set_interaction_mode(mode)
+        
+        # Update UI state
+        self.select_action.setChecked(mode == 'select')
+        self.pan_action.setChecked(mode == 'pan')
 
     
     # View operations

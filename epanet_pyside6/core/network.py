@@ -21,13 +21,18 @@ class Network:
         self.title: List[str] = ["", "", ""]
         self.notes: str = ""
         
+        # Calibration Data: {parameter_name: file_path}
+        self.calibration_data: Dict[str, str] = {}
+        
         # Map dimensions
         self.map_bounds: Dict[str, float] = {
             'min_x': 0.0,
             'min_y': 0.0,
             'max_x': 10000.0,
+            'max_x': 10000.0,
             'max_y': 10000.0
         }
+        self.map_units: str = "None" # Feet, Meters, Degrees, None
     
     def clear(self):
         """Clear all network data."""
@@ -38,6 +43,8 @@ class Network:
         self.options = Options()
         self.title = ["", "", ""]
         self.notes = ""
+        self.calibration_data.clear()
+        self.map_units = "None"
     
     # Node operations
     

@@ -65,6 +65,10 @@ class EPANETProject:
             
         wn = self.engine.wn
             
+        # Project Info
+        if hasattr(wn, 'title'):
+            wn.title = self.network.title
+            
         # Nodes
         for node in self.network.nodes.values():
             # Add node if not exists
@@ -364,6 +368,10 @@ class EPANETProject:
         wn = self.engine.wn
         if not wn:
             return
+            
+        # Project Info
+        if hasattr(wn, 'title'):
+            self.network.title = wn.title
             
         # Nodes
         for name, node in wn.nodes():

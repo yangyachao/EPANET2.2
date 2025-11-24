@@ -393,9 +393,43 @@ class MainWindow(QMainWindow):
         # Help Menu
         help_menu = menubar.addMenu("&Help")
         
+        help_topics_action = QAction("&Help Topics", self)
+        help_topics_action.setShortcut("F1")
+        help_topics_action.triggered.connect(self.show_help_topics)
+        help_menu.addAction(help_topics_action)
+        
+        units_action = QAction("&Units", self)
+        units_action.triggered.connect(self.show_units)
+        help_menu.addAction(units_action)
+        
+        tutorial_action = QAction("&Tutorial", self)
+        tutorial_action.triggered.connect(self.show_tutorial)
+        help_menu.addAction(tutorial_action)
+        
+        help_menu.addSeparator()
+        
         about_action = QAction("&About EPANET...", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
+        
+        # Add Print to File Menu
+        # Insert before Exit (which is last)
+        self.file_menu.insertSeparator(self.exit_action)
+        
+        page_setup_action = QAction("Page &Setup...", self)
+        page_setup_action.triggered.connect(self.page_setup)
+        self.file_menu.insertAction(self.exit_action, page_setup_action)
+        
+        print_preview_action = QAction("Print Pre&view...", self)
+        print_preview_action.triggered.connect(self.print_preview)
+        self.file_menu.insertAction(self.exit_action, print_preview_action)
+        
+        print_action = QAction("&Print...", self)
+        print_action.setShortcut("Ctrl+P")
+        print_action.triggered.connect(self.print_map)
+        self.file_menu.insertAction(self.exit_action, print_action)
+        
+        self.file_menu.insertSeparator(self.exit_action)
     
     def window_menu_about_to_show(self):
         """Update window menu with list of open windows."""
@@ -420,6 +454,82 @@ class MainWindow(QMainWindow):
     def close_all_windows(self):
         """Close all MDI subwindows."""
         self.mdi_area.closeAllSubWindows()
+
+    def show_help_topics(self):
+        """Show help topics."""
+        from gui.dialogs.help_dialog import HelpDialog
+        dialog = HelpDialog("EPANET Help", parent=self)
+        dialog.show()
+        self.help_dialog = dialog
+        
+    def show_units(self):
+        """Show units reference."""
+        from gui.dialogs.help_dialog import HelpDialog
+        html = """
+        <h1>Units of Measurement</h1>
+        <table border="1" cellpadding="5">
+        <tr><th>Parameter</th><th>US Customary</th><th>SI Metric</th></tr>
+        <tr><td>Flow</td><td>CFS, GPM, MGD</td><td>LPS, LPM, MLD, CMH</td></tr>
+        <tr><td>Pressure</td><td>psi</td><td>meters</td></tr>
+        <tr><td>Head</td><td>feet</td><td>meters</td></tr>
+        <tr><td>Diameter</td><td>inches</td><td>millimeters</td></tr>
+        </table>
+        """
+        dialog = HelpDialog("Units Reference", content=html, parent=self)
+        dialog.show()
+        self.units_dialog = dialog
+        
+    def show_tutorial(self):
+        """Show tutorial."""
+        from gui.dialogs.help_dialog import HelpDialog
+        html = """
+        <h1>EPANET Tutorial</h1>
+        <p><b>Step 1:</b> Draw the network using the toolbar buttons.</p>
+        <p><b>Step 2:</b> Edit properties of nodes and links.</p>
+        <p><b>Step 3:</b> Run the analysis (F5).</p>
+        <p><b>Step 4:</b> View results on the map or in reports.</p>
+        """
+        dialog = HelpDialog("Tutorial", content=html, parent=self)
+        dialog.show()
+        self.tutorial_dialog = dialog
+        
+    def page_setup(self):
+        """Show page setup dialog."""
+        # For now, just a placeholder or basic QPageSetupDialog if needed
+        # QPageSetupDialog requires a QPrinter
+        from PySide6.QtPrintSupport import QPageSetupDialog, QPrinter
+        printer = QPrinter()
+        dialog = QPageSetupDialog(printer, self)
+        dialog.exec()
+        
+    def print_preview(self):
+        """Show print preview."""
+        from PySide6.QtPrintSupport import QPrintPreviewDialog, QPrinter
+        printer = QPrinter()
+        dialog = QPrintPreviewDialog(printer, self)
+        dialog.paintRequested.connect(self._print_preview_paint)
+        dialog.exec()
+        
+    def _print_preview_paint(self, printer):
+        """Paint scene to printer for preview."""
+        painter = QPainter(printer)
+        # Render map scene
+        scene = self.map_widget.scene
+        rect = scene.itemsBoundingRect()
+        scene.render(painter, target=QRectF(printer.pageRect(QPrinter.DevicePixel)), source=rect)
+        painter.end()
+        
+    def print_map(self):
+        """Print map."""
+        from PySide6.QtPrintSupport import QPrintDialog, QPrinter
+        printer = QPrinter()
+        dialog = QPrintDialog(printer, self)
+        if dialog.exec() == QDialog.Accepted:
+            painter = QPainter(printer)
+            scene = self.map_widget.scene
+            rect = scene.itemsBoundingRect()
+            scene.render(painter, target=QRectF(printer.pageRect(QPrinter.DevicePixel)), source=rect)
+            painter.end()
 
     def show_status_report(self):
         """Show status report."""

@@ -2,6 +2,8 @@
 
 import wntr
 import pandas as pd
+import os
+import tempfile
 from typing import Optional, Dict, Any, Tuple
 from .constants import NodeType, LinkType, NodeParam, LinkParam
 
@@ -35,10 +37,31 @@ class Engine:
         """Run hydraulic and water quality simulation."""
         if not self.wn:
             raise RuntimeError("No project opened")
+        
+        # Save current working directory
+        original_cwd = os.getcwd()
+        
+        # Create a temporary directory for simulation files
+        temp_dir = tempfile.mkdtemp(prefix='epanet_sim_')
+        
+        try:
+            # Change to temp directory so WNTR writes temp files there
+            os.chdir(temp_dir)
             
-        # Use EpanetSimulator
-        sim = wntr.sim.EpanetSimulator(self.wn)
-        self.results = sim.run_sim()
+            # Use EpanetSimulator
+            sim = wntr.sim.EpanetSimulator(self.wn)
+            self.results = sim.run_sim()
+            
+        finally:
+            # Always restore original working directory
+            os.chdir(original_cwd)
+            
+            # Clean up temp directory
+            try:
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            except:
+                pass
         
     def get_version(self) -> str:
         """Get WNTR/EPANET version."""

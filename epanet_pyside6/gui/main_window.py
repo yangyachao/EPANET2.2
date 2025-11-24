@@ -657,7 +657,7 @@ class MainWindow(QMainWindow):
         self.std_toolbar.addAction(table_action)
         
         # Others (keep text or find icons)
-        contour_action = QAction(self.create_icon_from_text("🎨"), "Contour", self) 
+        contour_action = QAction(self.create_icon_from_text("🗺️"), "Contour", self) 
         contour_action.triggered.connect(self.create_contour)
         self.std_toolbar.addAction(contour_action)
         

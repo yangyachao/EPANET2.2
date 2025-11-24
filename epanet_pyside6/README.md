@@ -42,3 +42,7 @@ epanet_pyside6/
 ## License
 
 MIT License - Same as EPANET 2.2
+
+## Build
+cd epanet_pyside6
+pyinstaller --name="iepanet" --windowed --noconsole --clean --noconfirm --additional-hooks-dir=. main.py

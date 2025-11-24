@@ -7,6 +7,8 @@ from PySide6.QtGui import QPainter, QColor, QLinearGradient, QBrush, QPen
 class LegendWidget(QWidget):
     """Widget for displaying color legend."""
     
+    options_requested = Signal()
+
     def __init__(self, title="Legend", parent=None):
         super().__init__(parent)
         self.title = title
@@ -20,6 +22,8 @@ class LegendWidget(QWidget):
         self.values = [0.0, 25.0, 50.0, 75.0, 100.0]
         self.parameter_name = ""
         self.units = ""
+        
+        self._drag_start_pos = None
         
         self.setup_ui()
         
@@ -54,6 +58,42 @@ class LegendWidget(QWidget):
         
     def set_visible(self, visible):
         super().setVisible(visible)
+
+    # Draggability
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_start_pos = event.pos()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_start_pos:
+            # Calculate new position
+            delta = event.pos() - self._drag_start_pos
+            new_pos = self.pos() + delta
+            
+            # Keep within parent bounds (optional but good)
+            if self.parent():
+                parent_rect = self.parent().rect()
+                # Simple clamping
+                x = max(0, min(new_pos.x(), parent_rect.width() - self.width()))
+                y = max(0, min(new_pos.y(), parent_rect.height() - self.height()))
+                new_pos.setX(x)
+                new_pos.setY(y)
+            
+            self.move(new_pos)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_start_pos = None
+        super().mouseReleaseEvent(event)
+
+    # Context Menu
+    def contextMenuEvent(self, event):
+        from PySide6.QtWidgets import QMenu
+        menu = QMenu(self)
+        options_action = menu.addAction("Options...")
+        options_action.triggered.connect(self.options_requested.emit)
+        menu.exec(event.globalPos())
 
 
 class LegendScale(QWidget):

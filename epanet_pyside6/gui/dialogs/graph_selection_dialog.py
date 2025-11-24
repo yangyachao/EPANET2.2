@@ -11,10 +11,13 @@ from core.constants import NodeParam, LinkParam
 class GraphSelectionDialog(QDialog):
     """Dialog for selecting graph type, parameter, and objects."""
     
-    def __init__(self, project, parent=None, initial_type="Time Series"):
+    def __init__(self, project, parent=None, initial_type="Time Series", initial_selection=None, initial_obj_type=None):
         super().__init__(parent)
         self.project = project
         self.initial_type = initial_type
+        self.initial_selection = initial_selection or []
+        self.initial_obj_type = initial_obj_type # "Node" or "Link"
+        
         self.setWindowTitle("Graph Selection")
         self.resize(400, 500)
         
@@ -103,7 +106,19 @@ class GraphSelectionDialog(QDialog):
         layout.addWidget(button_box)
         
         # Initialize
-        self.on_object_type_changed(self.node_radio, True)
+        if self.initial_obj_type == "Link":
+            self.link_radio.setChecked(True)
+            self.on_object_type_changed(self.link_radio, True)
+        else:
+            self.node_radio.setChecked(True)
+            self.on_object_type_changed(self.node_radio, True)
+            
+        # Apply initial selection
+        if self.initial_selection:
+            for i in range(self.obj_list.count()):
+                item = self.obj_list.item(i)
+                if item.text() in self.initial_selection:
+                    item.setSelected(True)
         
     def on_object_type_changed(self, button, checked):
         """Handle object type change."""

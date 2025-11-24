@@ -1,12 +1,14 @@
 """Table view for network data and results."""
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QComboBox, QLabel, QHBoxLayout, QHeaderView, QPushButton, QFileDialog
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from core.constants import NodeType, LinkType
 from core.units import get_unit_label
 
 class TableView(QWidget):
     """Widget for displaying network data in tables."""
+    
+    object_selected = Signal(str, str) # type, id
     
     def __init__(self, project, parent=None):
         super().__init__(parent)
@@ -43,12 +45,39 @@ class TableView(QWidget):
         self.table = QTableWidget()
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SingleSelection)
+        self.table.itemSelectionChanged.connect(self.on_selection_changed)
         layout.addWidget(self.table)
         
     def on_type_changed(self, text):
         """Handle object type change."""
         self.current_type = text
         self.refresh_data()
+        
+    def on_selection_changed(self):
+        """Handle table selection change."""
+        selected_items = self.table.selectedItems()
+        if not selected_items:
+            return
+            
+        # Get ID from first column (index 0) of the selected row
+        row = selected_items[0].row()
+        obj_id = self.table.item(row, 0).text()
+        
+        # Determine object type for signal
+        # Map plural names to singular types used in browser/main window
+        type_map = {
+            "Junctions": "Node",
+            "Reservoirs": "Node", 
+            "Tanks": "Node",
+            "Pipes": "Link",
+            "Pumps": "Link",
+            "Valves": "Link"
+        }
+        
+        obj_type = type_map.get(self.current_type, "Node")
+        self.object_selected.emit(obj_type, obj_id)
     
     def _get_header_with_unit(self, param_name: str, param_type: str) -> str:
         """Get header with unit label.

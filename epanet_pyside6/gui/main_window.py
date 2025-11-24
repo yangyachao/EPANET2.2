@@ -129,6 +129,7 @@ class MainWindow(QMainWindow):
         # Create Map Window
         self.map_widget = MapWidget(self.project)
         self.map_widget.scene.selectionChanged.connect(self.on_map_selection_changed)
+        self.map_widget.options_requested.connect(self.show_map_options)
         self.map_subwindow = self.mdi_area.addSubWindow(self.map_widget)
         self.map_subwindow.setWindowTitle("Network Map")
         self.map_subwindow.showMaximized()
@@ -1103,11 +1104,31 @@ class MainWindow(QMainWindow):
         from gui.views import GraphView
         from gui.dialogs.graph_selection_dialog import GraphSelectionDialog
         
-        # Open selection dialog
-        dialog = GraphSelectionDialog(self.project, self)
+        # Get current map selection
+        selected_items = self.map_widget.scene.selectedItems()
+        initial_selection = []
+        initial_obj_type = "Node" # Default
         
-        # Pre-select current object if available (optional enhancement for later)
-        # For now, just open dialog
+        nodes = []
+        links = []
+        
+        for item in selected_items:
+            if hasattr(item, 'node'):
+                nodes.append(item.node.id)
+            elif hasattr(item, 'link'):
+                links.append(item.link.id)
+                
+        if nodes:
+            initial_selection = nodes
+            initial_obj_type = "Node"
+        elif links:
+            initial_selection = links
+            initial_obj_type = "Link"
+        
+        # Open selection dialog
+        dialog = GraphSelectionDialog(self.project, self, 
+                                    initial_selection=initial_selection,
+                                    initial_obj_type=initial_obj_type)
         
         if dialog.exec():
             selection = dialog.get_selection()
@@ -1135,6 +1156,8 @@ class MainWindow(QMainWindow):
         from gui.views import TableView
         
         table_view = TableView(self.project)
+        # Connect selection sync
+        table_view.object_selected.connect(self.on_browser_object_selected)
         
         subwindow = self.mdi_area.addSubWindow(table_view)
         subwindow.setWindowTitle("Network Table")

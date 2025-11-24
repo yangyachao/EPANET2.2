@@ -1,13 +1,15 @@
 """Map widget for displaying and editing the network."""
 
 from PySide6.QtWidgets import QGraphicsView, QMenu
-from PySide6.QtCore import Qt, QRectF
+from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QPainter
 from gui.graphics.scene import NetworkScene
 from .legend_widget import LegendWidget
 
 class MapWidget(QGraphicsView):
     """Interactive map widget."""
+    
+    options_requested = Signal() # Forward signal from legend
     
     def __init__(self, project, parent=None):
         super().__init__(parent)
@@ -24,6 +26,7 @@ class MapWidget(QGraphicsView):
         # Legend
         self.legend = LegendWidget("Legend", self)
         self.legend.hide()
+        self.legend.options_requested.connect(self.options_requested.emit)
         
         # Initial fit
         self.fit_network()

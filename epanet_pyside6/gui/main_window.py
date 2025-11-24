@@ -5,8 +5,8 @@ from PySide6.QtWidgets import (
     QHeaderView, QMenu, QMessageBox, QInputDialog, QFileDialog,
     QToolBar, QStyle
 )
-from PySide6.QtCore import Qt, QSize, QSettings
-from PySide6.QtGui import QAction, QKeySequence, QColor
+from PySide6.QtCore import Qt, QSize, QSettings, QPointF
+from PySide6.QtGui import QAction, QKeySequence, QColor, QIcon, QPixmap, QPainter, QFont, QPolygonF, QPainterPath, QPen
 import sys
 import os
 
@@ -102,7 +102,6 @@ class MainWindow(QMainWindow):
             
         try:
             self.project.open_project(filename)
-            print(f"DEBUG: Project opened. Nodes: {len(self.project.network.nodes)}, Links: {len(self.project.network.links)}", flush=True)
             self.browser_widget.refresh()
             self.property_editor.set_object(None)
             
@@ -345,6 +344,53 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
     
+    def create_cursor_icon(self):
+        """Create a custom mouse cursor icon."""
+        pixmap = QPixmap(32, 32)
+        pixmap.fill(Qt.transparent)
+        
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # Draw arrow shape
+        polygon = QPolygonF([
+            QPointF(8, 4),    # Tip
+            QPointF(8, 24),   # Bottom left
+            QPointF(13, 19),  # Inner corner
+            QPointF(17, 27),  # Tail bottom left
+            QPointF(20, 25),  # Tail bottom right
+            QPointF(16, 17),  # Tail top
+            QPointF(23, 17),  # Right corner
+        ])
+        
+        # Fill white with black border
+        path = QPainterPath()
+        path.addPolygon(polygon)
+        
+        painter.setPen(QPen(Qt.black, 1.5, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        painter.setBrush(Qt.white)
+        painter.drawPath(path)
+        
+        painter.end()
+        return QIcon(pixmap)
+
+    def create_icon_from_text(self, text, color=Qt.black):
+        """Create a QIcon from a text character."""
+        pixmap = QPixmap(32, 32)
+        pixmap.fill(Qt.transparent)
+        
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(color)
+        
+        font = QFont("Arial", 24)
+        painter.setFont(font)
+        
+        painter.drawText(pixmap.rect(), Qt.AlignCenter, text)
+        painter.end()
+        
+        return QIcon(pixmap)
+
     def create_toolbars(self):
         """Create toolbars."""
         # Standard toolbar
@@ -370,12 +416,14 @@ class MainWindow(QMainWindow):
         
         # View modes
         # Select (Arrow)
-        self.select_action.setIcon(self.style().standardIcon(QStyle.SP_ArrowUp))
+        # Use a custom icon for Select (Mouse Pointer)
+        self.select_action.setIcon(self.create_cursor_icon())
         self.select_action.setText("Select")
         self.std_toolbar.addAction(self.select_action)
         
-        # Pan
-        self.pan_action.setIcon(self.style().standardIcon(QStyle.SP_ToolBarHorizontalExtensionButton))
+        # Pan (Hand)
+        # Use a custom icon for Pan (Hand)
+        self.pan_action.setIcon(self.create_icon_from_text("✋"))
         self.pan_action.setText("Pan")
         self.std_toolbar.addAction(self.pan_action)
         

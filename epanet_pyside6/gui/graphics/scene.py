@@ -27,9 +27,7 @@ class NetworkScene(QGraphicsScene):
 
     def update_scene_rect(self):
         """Update scene rectangle based on map dimensions."""
-        print("DEBUG: update_scene_rect called", flush=True)
         bounds = self.project.network.map_bounds
-        print(f"DEBUG: map_bounds: {bounds}", flush=True)
         min_x = bounds.get('min_x', 0.0)
         min_y = bounds.get('min_y', 0.0)
         max_x = bounds.get('max_x', 10000.0)
@@ -54,11 +52,8 @@ class NetworkScene(QGraphicsScene):
         width = max_x - min_x
         height = max_y - min_y
         
-        print(f"DEBUG: Setting sceneRect to ({min_x}, 0, {width}, {height})", flush=True)
-        
         # We use self.max_y to flip coordinates.
         if hasattr(self, 'max_y') and self.max_y != max_y:
-            print(f"DEBUG: max_y changed from {self.max_y} to {max_y}. Reloading...", flush=True)
             self.max_y = max_y
             self.load_network() # Reload to update positions
         
@@ -85,26 +80,21 @@ class NetworkScene(QGraphicsScene):
 
     def load_network(self):
         """Load network objects into the scene."""
-        print("DEBUG: NetworkScene.load_network called", flush=True)
         self.clear()
         self.node_items.clear()
         self.link_items.clear()
         
         network = self.project.network
-        print(f"DEBUG: Network has {len(network.nodes)} nodes and {len(network.links)} links", flush=True)
         
         if not network.nodes:
-            print("DEBUG: No nodes to load", flush=True)
             return
         
         # Calculate adaptive node size based on network bounds
         self.node_scale = self._calculate_node_scale(network)
-        print(f"DEBUG: Calculated node_scale: {self.node_scale}", flush=True)
         
         # Calculate Y-axis flip (EPANET Y goes up, Qt Y goes down)
         if network.nodes:
             self.max_y = max(node.y for node in network.nodes.values())
-            print(f"DEBUG: max_y for flipping: {self.max_y}", flush=True)
         else:
             self.max_y = 0
         
@@ -121,13 +111,6 @@ class NetworkScene(QGraphicsScene):
                 
             self.addItem(item)
             self.node_items[node.id] = item
-            
-        print(f"DEBUG: Added {len(self.node_items)} node items", flush=True)
-        if self.node_items:
-            first_item = list(self.node_items.values())[0]
-            print(f"DEBUG: First node pos: {first_item.pos()}", flush=True)
-            
-        # Add Links
             
         # Add Links
         for link in network.links.values():

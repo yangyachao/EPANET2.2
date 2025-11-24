@@ -1076,6 +1076,19 @@ class MainWindow(QMainWindow):
                     self.browser_widget.map_browser.set_time_steps(times)
                     break
             
+            # Auto-update map values
+            # Ensure we have current parameters set
+            if not hasattr(self, 'current_node_param') or not self.current_node_param:
+                self.current_node_param = self.browser_widget.map_browser.node_combo.currentText()
+                if self.current_node_param == "NONE": self.current_node_param = None
+                
+            if not hasattr(self, 'current_link_param') or not self.current_link_param:
+                self.current_link_param = self.browser_widget.map_browser.link_combo.currentText()
+                if self.current_link_param == "NONE": self.current_link_param = None
+            
+            # Force update
+            self._update_map_colors()
+            
             self.status_bar.showMessage("Simulation completed successfully")
             
         except Exception as e:

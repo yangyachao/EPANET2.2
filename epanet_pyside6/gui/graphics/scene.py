@@ -160,8 +160,21 @@ class NetworkScene(QGraphicsScene):
                 val = values[node_id]
                 color = self._get_color_for_value(val, legend_colors, legend_values)
                 item.set_color(color)
+                
+                # Update value label text
+                if hasattr(item, 'value_label'):
+                    item.value_label.setText(f"{val:.2f}")
+                    # Update position to ensure centering
+                    if hasattr(item, 'update_label_positions'):
+                        item.update_label_positions()
             else:
                 item.set_color(None)
+                # Reset label text if needed, or keep last known? 
+                # Better to clear or show default if no value
+                if hasattr(item, 'value_label'):
+                    item.value_label.setText("0.00")
+                    if hasattr(item, 'update_label_positions'):
+                        item.update_label_positions()
                 
     def update_link_colors(self, values, legend_colors, legend_values):
         """Update link colors based on values and legend."""
@@ -176,8 +189,19 @@ class NetworkScene(QGraphicsScene):
                 val = values[link_id]
                 color = self._get_color_for_value(val, legend_colors, legend_values)
                 item.set_color(color)
+                
+                # Update value label text
+                if hasattr(item, 'value_label'):
+                    item.value_label.setText(f"{val:.2f}")
+                    # Update position to ensure centering
+                    if hasattr(item, 'update_label_positions'):
+                        item.update_label_positions()
             else:
                 item.set_color(None)
+                if hasattr(item, 'value_label'):
+                    item.value_label.setText("0.00")
+                    if hasattr(item, 'update_label_positions'):
+                        item.update_label_positions()
                 
     def _get_color_for_value(self, value, colors, intervals):
         """Get color for a value based on legend intervals."""

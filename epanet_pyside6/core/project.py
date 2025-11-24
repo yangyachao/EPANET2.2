@@ -404,12 +404,29 @@ class EPANETProject:
                     init_level=node.init_level,
                     min_level=node.min_level,
                     max_level=node.max_level,
-                    diameter=node.diameter * 1000.0  # Convert m to mm
+                    diameter=node.diameter * 1000.0,  # Convert m to mm
+                    min_volume=node.min_vol,
+                    volume_curve=getattr(node, 'vol_curve_name', None)
                 )
             else:
                 continue
                 
             self.network.add_node(new_node)
+            
+        # Update map bounds from WNTR options if available
+        if hasattr(wn, 'options') and hasattr(wn.options, 'graphics') and hasattr(wn.options.graphics, 'map_extent'):
+            extent = wn.options.graphics.map_extent
+            if extent:
+                # extent is usually (min_x, min_y, max_x, max_y) or similar
+                # WNTR might store it as a list or tuple
+                try:
+                    if len(extent) == 4:
+                        self.network.map_bounds['min_x'] = float(extent[0])
+                        self.network.map_bounds['min_y'] = float(extent[1])
+                        self.network.map_bounds['max_x'] = float(extent[2])
+                        self.network.map_bounds['max_y'] = float(extent[3])
+                except:
+                    pass
             
         # Links
         for name, link in wn.links():

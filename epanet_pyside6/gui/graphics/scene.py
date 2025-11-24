@@ -27,29 +27,38 @@ class NetworkScene(QGraphicsScene):
 
     def update_scene_rect(self):
         """Update scene rectangle based on map dimensions."""
+        print("DEBUG: update_scene_rect called", flush=True)
         bounds = self.project.network.map_bounds
+        print(f"DEBUG: map_bounds: {bounds}", flush=True)
         min_x = bounds.get('min_x', 0.0)
         min_y = bounds.get('min_y', 0.0)
         max_x = bounds.get('max_x', 10000.0)
         max_y = bounds.get('max_y', 10000.0)
         
-        # EPANET Y goes up, Qt Y goes down. 
-        # We need to handle the coordinate system transformation.
-        # But for the scene rect, we just want to cover the area.
-        # Since we flip Y in item positions, we should probably flip here too or just use the raw values?
-        # Let's look at how items are positioned.
-        # Node Y is max_y - node.y.
-        # So if node.y is 0, pos.y is max_y. If node.y is max_y, pos.y is 0.
-        # So the scene rect should be (min_x, 0, width, max_y).
+        # Handle empty network or uninitialized bounds
+        if min_x == float('inf'):
+            min_x = 0.0
+        if min_y == float('inf'):
+            min_y = 0.0
+        if max_x == float('-inf'):
+            max_x = 10000.0
+        if max_y == float('-inf'):
+            max_y = 10000.0
+            
+        # Ensure valid dimensions
+        if max_x <= min_x:
+            max_x = min_x + 10000.0
+        if max_y <= min_y:
+            max_y = min_y + 10000.0
         
         width = max_x - min_x
         height = max_y - min_y
         
-        # We use self.max_y to flip coordinates.
-        # If we change dimensions, we might need to update self.max_y and re-position items?
-        # Yes, if max_y changes, all node positions change because of the flip.
+        print(f"DEBUG: Setting sceneRect to ({min_x}, 0, {width}, {height})", flush=True)
         
+        # We use self.max_y to flip coordinates.
         if hasattr(self, 'max_y') and self.max_y != max_y:
+            print(f"DEBUG: max_y changed from {self.max_y} to {max_y}. Reloading...", flush=True)
             self.max_y = max_y
             self.load_network() # Reload to update positions
         
@@ -76,18 +85,26 @@ class NetworkScene(QGraphicsScene):
 
     def load_network(self):
         """Load network objects into the scene."""
+        print("DEBUG: NetworkScene.load_network called", flush=True)
         self.clear()
         self.node_items.clear()
         self.link_items.clear()
         
         network = self.project.network
+        print(f"DEBUG: Network has {len(network.nodes)} nodes and {len(network.links)} links", flush=True)
+        
+        if not network.nodes:
+            print("DEBUG: No nodes to load", flush=True)
+            return
         
         # Calculate adaptive node size based on network bounds
         self.node_scale = self._calculate_node_scale(network)
+        print(f"DEBUG: Calculated node_scale: {self.node_scale}", flush=True)
         
         # Calculate Y-axis flip (EPANET Y goes up, Qt Y goes down)
         if network.nodes:
             self.max_y = max(node.y for node in network.nodes.values())
+            print(f"DEBUG: max_y for flipping: {self.max_y}", flush=True)
         else:
             self.max_y = 0
         
@@ -104,6 +121,13 @@ class NetworkScene(QGraphicsScene):
                 
             self.addItem(item)
             self.node_items[node.id] = item
+            
+        print(f"DEBUG: Added {len(self.node_items)} node items", flush=True)
+        if self.node_items:
+            first_item = list(self.node_items.values())[0]
+            print(f"DEBUG: First node pos: {first_item.pos()}", flush=True)
+            
+        # Add Links
             
         # Add Links
         for link in network.links.values():

@@ -102,10 +102,14 @@ class MainWindow(QMainWindow):
             
         try:
             self.project.open_project(filename)
+            print(f"DEBUG: Project opened. Nodes: {len(self.project.network.nodes)}, Links: {len(self.project.network.links)}", flush=True)
             self.browser_widget.refresh()
             self.property_editor.set_object(None)
+            
             self.map_widget.scene.load_network()
+            self.map_widget.scene.update_scene_rect()
             self.map_widget.fit_network()
+            
             self.update_title()
             self.status_bar.showMessage(f"Opened {filename}")
             

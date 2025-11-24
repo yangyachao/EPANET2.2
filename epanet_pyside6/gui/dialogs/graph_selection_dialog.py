@@ -137,6 +137,12 @@ class GraphSelectionDialog(QDialog):
             graph_type = "Time Series"
         elif self.profile_radio.isChecked():
             graph_type = "Profile"
+        elif self.contour_radio.isChecked():
+            graph_type = "Contour"
+        elif self.freq_radio.isChecked():
+            graph_type = "Frequency"
+        elif self.flow_radio.isChecked():
+            graph_type = "System Flow"
         else:
             graph_type = "Other"
             

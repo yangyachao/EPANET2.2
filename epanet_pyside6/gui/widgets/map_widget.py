@@ -48,10 +48,31 @@ class MapWidget(QGraphicsView):
     def fit_network(self):
         """Fit the view to the network extent."""
         rect = self.scene.itemsBoundingRect()
+        print(f"DEBUG: fit_network. itemsBoundingRect: {rect}", flush=True)
+        print(f"DEBUG: sceneRect: {self.scene.sceneRect()}", flush=True)
+        
         if not rect.isNull():
+            # Check for outliers if rect is unexpectedly large
+            # Nodes are at X~104, Y~0. Rect is X~90, Y~-9.
+            if rect.left() < 100 or rect.top() < -1:
+                print("DEBUG: Found potential outliers. Scanning items...", flush=True)
+                for item in self.scene.items():
+                    br = item.sceneBoundingRect()
+                    if br.left() < 100 or br.top() < -1:
+                        print(f"DEBUG: Outlier Item: {item}", flush=True)
+                        print(f"DEBUG:   BoundingRect: {br}", flush=True)
+                        if hasattr(item, 'node'):
+                            print(f"DEBUG:   Node ID: {item.node.id}, Pos: {item.pos()}", flush=True)
+                        if hasattr(item, 'link'):
+                            print(f"DEBUG:   Link ID: {item.link.id}", flush=True)
+                            print(f"DEBUG:   From: {item.link.from_node} To: {item.link.to_node}", flush=True)
+            
             self.fitInView(rect, Qt.KeepAspectRatio)
             # Zoom out a bit
             self.scale(0.9, 0.9)
+            print("DEBUG: fitInView called", flush=True)
+        else:
+            print("DEBUG: itemsBoundingRect is null", flush=True)
 
     def wheelEvent(self, event):
         """Handle zoom with mouse wheel."""

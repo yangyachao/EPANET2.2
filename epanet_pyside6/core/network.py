@@ -26,11 +26,10 @@ class Network:
         
         # Map dimensions
         self.map_bounds: Dict[str, float] = {
-            'min_x': 0.0,
-            'min_y': 0.0,
-            'max_x': 10000.0,
-            'max_x': 10000.0,
-            'max_y': 10000.0
+            'min_x': float('inf'),
+            'min_y': float('inf'),
+            'max_x': float('-inf'),
+            'max_y': float('-inf')
         }
         self.map_units: str = "None" # Feet, Meters, Degrees, None
     
@@ -45,6 +44,12 @@ class Network:
         self.notes = ""
         self.calibration_data.clear()
         self.map_units = "None"
+        self.map_bounds = {
+            'min_x': float('inf'),
+            'min_y': float('inf'),
+            'max_x': float('-inf'),
+            'max_y': float('-inf')
+        }
     
     # Node operations
     

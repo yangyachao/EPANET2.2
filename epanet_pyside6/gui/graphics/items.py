@@ -39,11 +39,13 @@ class NodeItem(QGraphicsEllipseItem):
         self.id_label = QGraphicsSimpleTextItem(self.node.id, self)
         self.id_label.setBrush(QBrush(Qt.black))
         self.id_label.setFont(QFont("Arial", 8))
+        self.id_label.setScale(scale)  # Scale text to match scene
         self.id_label.setVisible(False)
         
         self.value_label = QGraphicsSimpleTextItem("", self)
         self.value_label.setBrush(QBrush(Qt.black))
         self.value_label.setFont(QFont("Arial", 8))
+        self.value_label.setScale(scale)  # Scale text to match scene
         self.value_label.setVisible(False)
         
         # Position labels
@@ -54,18 +56,17 @@ class NodeItem(QGraphicsEllipseItem):
         r = self.radius
         
         # ID label above node
-        id_scale = self.id_label.scale()
+        # Note: boundingRect is in local coords (unscaled), so we multiply by scale
         id_rect = self.id_label.boundingRect()
         self.id_label.setPos(
-            -id_rect.width() * id_scale / 2, 
-            -r - (id_rect.height() * id_scale) - (2 * self.scale)
+            -id_rect.width() * self.scale / 2, 
+            -r - (id_rect.height() * self.scale) - (2 * self.scale)
         )
         
         # Value label below node
-        val_scale = self.value_label.scale()
         val_rect = self.value_label.boundingRect()
         self.value_label.setPos(
-            -val_rect.width() * val_scale / 2, 
+            -val_rect.width() * self.scale / 2, 
             r + (2 * self.scale)
         )
 
@@ -155,11 +156,13 @@ class LinkItem(QGraphicsPathItem):
         self.id_label = QGraphicsSimpleTextItem(self.link.id, self)
         self.id_label.setBrush(QBrush(Qt.black))
         self.id_label.setFont(QFont("Arial", 8))
+        self.id_label.setScale(scale)  # Scale text to match scene
         self.id_label.setVisible(False)
         
         self.value_label = QGraphicsSimpleTextItem("", self)
         self.value_label.setBrush(QBrush(Qt.black))
         self.value_label.setFont(QFont("Arial", 8))
+        self.value_label.setScale(scale)  # Scale text to match scene
         self.value_label.setVisible(False)
         
         self.update_path()

@@ -340,23 +340,139 @@ class MainWindow(QMainWindow):
         self.view_menu.addSeparator()
         
         # Window Menu
-        window_menu = menubar.addMenu("&Window")
+        self.window_menu = menubar.addMenu("&Window")
+        self.window_menu.aboutToShow.connect(self.window_menu_about_to_show)
         
         cascade_action = QAction("&Cascade", self)
         cascade_action.triggered.connect(self.mdi_area.cascadeSubWindows)
-        window_menu.addAction(cascade_action)
+        self.window_menu.addAction(cascade_action)
         
         tile_action = QAction("&Tile", self)
         tile_action.triggered.connect(self.mdi_area.tileSubWindows)
-        window_menu.addAction(tile_action)
+        self.window_menu.addAction(tile_action)
+        
+        close_all_action = QAction("Close &All", self)
+        close_all_action.triggered.connect(self.close_all_windows)
+        self.window_menu.addAction(close_all_action)
+        
+        self.window_menu.addSeparator()
+        
+        # Report Menu
+        report_menu = menubar.addMenu("&Report")
+        
+        status_report_action = QAction("&Status", self)
+        status_report_action.triggered.connect(self.show_status_report)
+        report_menu.addAction(status_report_action)
+        
+        energy_report_action = QAction("&Energy", self)
+        energy_report_action.triggered.connect(self.show_energy_report)
+        report_menu.addAction(energy_report_action)
+        
+        calibration_report_action = QAction("&Calibration", self)
+        calibration_report_action.triggered.connect(self.show_calibration_report)
+        report_menu.addAction(calibration_report_action)
+        
+        reaction_report_action = QAction("&Reaction", self)
+        reaction_report_action.triggered.connect(self.show_reaction_report)
+        report_menu.addAction(reaction_report_action)
+        
+        report_menu.addSeparator()
+        
+        graph_action = QAction("&Graph...", self)
+        graph_action.triggered.connect(self.create_graph)
+        report_menu.addAction(graph_action)
+        
+        table_action = QAction("&Table...", self)
+        table_action.triggered.connect(self.create_table)
+        report_menu.addAction(table_action)
+        
+        contour_action = QAction("&Contour...", self)
+        contour_action.triggered.connect(self.create_contour)
+        report_menu.addAction(contour_action)
         
         # Help Menu
         help_menu = menubar.addMenu("&Help")
         
-        about_action = QAction("&About", self)
+        about_action = QAction("&About EPANET...", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
     
+    def window_menu_about_to_show(self):
+        """Update window menu with list of open windows."""
+        # Clear existing window actions (keep first 4: Cascade, Tile, Close All, Separator)
+        actions = self.window_menu.actions()
+        for action in actions[4:]:
+            self.window_menu.removeAction(action)
+            
+        # Add action for each subwindow
+        subwindows = self.mdi_area.subWindowList()
+        if not subwindows:
+            return
+            
+        for i, subwindow in enumerate(subwindows):
+            title = subwindow.windowTitle()
+            action = QAction(f"{i+1} {title}", self)
+            action.setCheckable(True)
+            action.setChecked(subwindow == self.mdi_area.activeSubWindow())
+            action.triggered.connect(lambda checked=False, s=subwindow: self.mdi_area.setActiveSubWindow(s))
+            self.window_menu.addAction(action)
+            
+    def close_all_windows(self):
+        """Close all MDI subwindows."""
+        self.mdi_area.closeAllSubWindows()
+
+    def show_status_report(self):
+        """Show status report."""
+        from gui.reports.status_report import StatusReport
+        report = StatusReport(self.project)
+        report.show()
+        self.status_report = report
+        
+    def show_energy_report(self):
+        """Show energy report."""
+        from gui.reports.energy_report import EnergyReport
+        report = EnergyReport(self.project)
+        report.show()
+        self.energy_report = report
+
+    def show_calibration_report(self):
+        """Show calibration report."""
+        from gui.reports.calibration_report import CalibrationReport
+        report = CalibrationReport(self.project)
+        report.show()
+        # Keep reference to prevent garbage collection
+        self.calibration_report = report
+        
+    def show_reaction_report(self):
+        """Show reaction report."""
+        from gui.reports.reaction_report import ReactionReport
+        report = ReactionReport(self.project)
+        report.show()
+        self.reaction_report = report
+        
+    def export_map(self):
+        """Export map to image file."""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Map", "", 
+            "PNG Image (*.png);;JPEG Image (*.jpg);;PDF Document (*.pdf)"
+        )
+        
+        if file_path:
+            # Grab the scene content
+            scene = self.map_widget.scene
+            rect = scene.itemsBoundingRect()
+            
+            # Create image
+            image = QImage(rect.size().toSize(), QImage.Format_ARGB32)
+            image.fill(Qt.white)
+            
+            painter = QPainter(image)
+            scene.render(painter, target=QRectF(image.rect()), source=rect)
+            painter.end()
+            
+            image.save(file_path)
+            self.status_bar.showMessage(f"Map exported to {file_path}")
+
     def create_icon_from_text(self, text, color=Qt.black):
         """Create a QIcon from a text character."""
         pixmap = QPixmap(32, 32)

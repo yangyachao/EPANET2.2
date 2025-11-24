@@ -838,12 +838,24 @@ class MainWindow(QMainWindow):
     def create_contour(self):
         """Create a new contour window."""
         from gui.views import ContourView
+        from gui.dialogs.graph_selection_dialog import GraphSelectionDialog
         
-        contour_view = ContourView(self.project)
+        dialog = GraphSelectionDialog(self.project, self, initial_type="Contour")
         
-        subwindow = self.mdi_area.addSubWindow(contour_view)
-        subwindow.setWindowTitle("Network Contour")
-        subwindow.showMaximized()
+        if dialog.exec():
+            selection = dialog.get_selection()
+            
+            if selection['graph_type'] == "Contour":
+                contour_view = ContourView(self.project)
+                contour_view.set_parameter(selection['parameter'])
+                
+                subwindow = self.mdi_area.addSubWindow(contour_view)
+                subwindow.setWindowTitle(f"Contour - {selection['parameter'].name}")
+                subwindow.showMaximized()
+            else:
+                # If user changed mind and selected something else, handle it or warn
+                # For now, just handle Contour
+                QMessageBox.information(self, "Contour", "Please select Contour Plot type.")
         
     def create_status(self):
         """Create a new status report window."""

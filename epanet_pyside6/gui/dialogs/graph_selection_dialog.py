@@ -11,9 +11,10 @@ from core.constants import NodeParam, LinkParam
 class GraphSelectionDialog(QDialog):
     """Dialog for selecting graph type, parameter, and objects."""
     
-    def __init__(self, project, parent=None):
+    def __init__(self, project, parent=None, initial_type="Time Series"):
         super().__init__(parent)
         self.project = project
+        self.initial_type = initial_type
         self.setWindowTitle("Graph Selection")
         self.resize(400, 500)
         
@@ -28,11 +29,21 @@ class GraphSelectionDialog(QDialog):
         type_layout = QVBoxLayout()
         
         self.ts_radio = QRadioButton("Time Series")
-        self.ts_radio.setChecked(True)
         self.profile_radio = QRadioButton("Profile Plot")
         self.contour_radio = QRadioButton("Contour Plot")
         self.freq_radio = QRadioButton("Frequency Plot")
         self.flow_radio = QRadioButton("System Flow")
+        
+        if self.initial_type == "Time Series":
+            self.ts_radio.setChecked(True)
+        elif self.initial_type == "Profile":
+            self.profile_radio.setChecked(True)
+        elif self.initial_type == "Contour":
+            self.contour_radio.setChecked(True)
+        elif self.initial_type == "Frequency":
+            self.freq_radio.setChecked(True)
+        elif self.initial_type == "System Flow":
+            self.flow_radio.setChecked(True)
         
         # Group buttons
         self.type_bg = QButtonGroup(self)

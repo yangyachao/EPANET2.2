@@ -1,6 +1,6 @@
 """EPANET Project management."""
 
-from typing import Optional, Callable, Any, Tuple
+from typing import Optional, Callable, Any, Tuple, Dict
 import wntr
 from .engine import Engine
 from .network import Network
@@ -550,6 +550,14 @@ class EPANETProject:
     def get_time_series(self, obj_type: str, obj_id: str, param: Any) -> Tuple[list, list]:
         """Get time series data."""
         return self.engine.get_time_series(obj_type, obj_id, param)
+
+    def get_simulation_times(self) -> list:
+        """Get simulation time steps in hours."""
+        return self.engine.get_simulation_times()
+
+    def get_network_values_at_time(self, param: NodeParam, time_index: int) -> Dict[str, float]:
+        """Get values for all nodes at a specific time index."""
+        return self.engine.get_network_values_at_time(param, time_index)
 
     def get_pump_energy(self, pump_id: str) -> float:
         """Get pump energy usage."""

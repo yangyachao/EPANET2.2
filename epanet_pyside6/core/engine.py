@@ -131,6 +131,41 @@ class Engine:
         except KeyError:
             return [], []
             
+    def get_simulation_times(self) -> list:
+        """Get simulation time steps in hours."""
+        if not self.results:
+            return []
+        try:
+            # Assume all node results have same time index
+            return (self.results.node['pressure'].index / 3600.0).tolist()
+        except:
+            return []
+
+    def get_network_values_at_time(self, param: NodeParam, time_index: int) -> Dict[str, float]:
+        """Get values for all nodes at a specific time index."""
+        if not self.results:
+            return {}
+            
+        try:
+            df = None
+            if param == NodeParam.DEMAND:
+                df = self.results.node['demand']
+            elif param == NodeParam.HEAD:
+                df = self.results.node['head']
+            elif param == NodeParam.PRESSURE:
+                df = self.results.node['pressure']
+            elif param == NodeParam.QUALITY:
+                df = self.results.node['quality']
+            
+            if df is not None:
+                # Get row at time_index
+                if 0 <= time_index < len(df.index):
+                    return df.iloc[time_index].to_dict()
+                    
+        except KeyError:
+            pass
+        return {}
+
     def get_pump_energy(self, pump_id: str) -> float:
         """Get pump energy usage (kWh)."""
         if not self.results:

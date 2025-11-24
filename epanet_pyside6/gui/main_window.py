@@ -412,6 +412,8 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
         
+
+        
         # Add Print to File Menu
         # Insert before Exit (which is last)
         self.file_menu.insertSeparator(self.exit_action)
@@ -492,6 +494,12 @@ class MainWindow(QMainWindow):
         dialog = HelpDialog("Tutorial", content=html, parent=self)
         dialog.show()
         self.tutorial_dialog = dialog
+        
+    def show_about(self):
+        """Show about dialog."""
+        from gui.dialogs.about_dialog import AboutDialog
+        dialog = AboutDialog(self)
+        dialog.exec()
         
     def page_setup(self):
         """Show page setup dialog."""
@@ -974,7 +982,21 @@ class MainWindow(QMainWindow):
                 
     def import_map(self):
         """Import map file."""
-        QMessageBox.information(self, "Not Implemented", "Import Map functionality is coming soon.")
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Import Map", "", "Map Files (*.map);;EPANET Input Files (*.inp);;All Files (*.*)"
+        )
+        
+        if not filename:
+            return
+            
+        try:
+            count = self.project.import_map(filename)
+            self.map_widget.scene.load_network()
+            self.map_widget.fit_network()
+            self.status_bar.showMessage(f"Imported coordinates for {count} nodes from {filename}")
+            QMessageBox.information(self, "Import Map", f"Updated coordinates for {count} nodes.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to import map:\n{str(e)}")
         
     def import_scenario(self):
         """Import scenario file."""

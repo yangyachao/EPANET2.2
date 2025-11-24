@@ -226,21 +226,13 @@ class NetworkScene(QGraphicsScene):
         if width == 0 or height == 0:
             return 1.0
         
-        # Node size should be ~1% of the smaller dimension
-        # This ensures nodes are visible but not too large
+        # Node size should be ~1.5% of the smaller dimension for better visibility
         smaller_dim = min(width, height)
-        scale = smaller_dim * 0.01
+        scale = smaller_dim * 0.015
         
-        # Dynamic minimum scale based on coordinate range magnitude
-        # For GPS coordinates (range < 1), use smaller scale for less overlap
-        # For normal coordinates (range > 100), use larger minimum
-        if smaller_dim < 1:
-            min_scale = 0.0003  # GPS coordinates - reduced to avoid overlap
-        elif smaller_dim < 100:
-            min_scale = 0.3     # Medium range coordinates
-        else:
-            min_scale = 10.0    # Large range coordinates
-        
+        # Minimal floor to avoid zero, but allow very small scales for GPS coords
+        min_scale = 1e-5
+            
         return max(scale, min_scale)
     
     def set_backdrop(self, image_path, ul_x, ul_y, lr_x, lr_y):

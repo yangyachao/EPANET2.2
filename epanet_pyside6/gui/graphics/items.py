@@ -8,7 +8,7 @@ class NodeItem(QGraphicsEllipseItem):
     """Base class for node graphics items."""
     
     def __init__(self, node, radius=1.0, scale=1.0, max_y=0):
-        # Apply scale to radius
+        # Apply scale to radius for adaptive sizing
         scaled_radius = radius * scale
         super().__init__(-scaled_radius, -scaled_radius, scaled_radius*2, scaled_radius*2)
         self.node = node
@@ -16,7 +16,8 @@ class NodeItem(QGraphicsEllipseItem):
         self.scale = scale
         self.max_y = max_y
         self.normal_color = Qt.white
-        self.normal_pen = QPen(Qt.black, 0.05 * scale)
+        # Cosmetic pen (width=0) - always 1 pixel regardless of zoom
+        self.normal_pen = QPen(Qt.black, 0)
         # Flip Y coordinate: EPANET Y goes up, Qt Y goes down
         self.setPos(node.x, max_y - node.y)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
@@ -24,7 +25,7 @@ class NodeItem(QGraphicsEllipseItem):
         self.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
         self.setAcceptHoverEvents(True)
         
-        # Default style with thicker border
+        # Default style with cosmetic border
         self.setPen(self.normal_pen)
         self.setBrush(QBrush(self.normal_color))
         self.setToolTip(f"{node.id}\nElevation: {node.elevation}")
@@ -47,27 +48,33 @@ class NodeItem(QGraphicsEllipseItem):
         self.value_label.setFont(QFont("Arial", 8))
         self.value_label.setScale(scale)  # Scale text to match scene
         self.value_label.setVisible(False)
+        self.id_label.setFlag(QGraphicsItem.ItemIgnoresTransformations) # Label ignores zoom
+        self.id_label.setVisible(False)
+        
+        self.value_label = QGraphicsSimpleTextItem("", self)
+        self.value_label.setBrush(QBrush(Qt.black))
+        self.value_label.setFont(QFont("Arial", 8))
+        self.value_label.setFlag(QGraphicsItem.ItemIgnoresTransformations) # Label ignores zoom
+        self.value_label.setVisible(False)
         
         # Position labels
         self.update_label_positions()
 
     def update_label_positions(self):
         """Update positions of text labels."""
-        r = self.radius
-        
-        # ID label above node
-        # Note: boundingRect is in local coords (unscaled), so we multiply by scale
+        # With ItemIgnoresTransformations, labels are in screen pixels
+        # Use fixed pixel offset from node
         id_rect = self.id_label.boundingRect()
+        offset = 20  # Fixed pixels above node
         self.id_label.setPos(
-            -id_rect.width() * self.scale / 2, 
-            -r - (id_rect.height() * self.scale) - (2 * self.scale)
+            -id_rect.width() / 2,
+            -offset - id_rect.height()
         )
         
-        # Value label below node
         val_rect = self.value_label.boundingRect()
         self.value_label.setPos(
-            -val_rect.width() * self.scale / 2, 
-            r + (2 * self.scale)
+            -val_rect.width() / 2,
+            offset
         )
 
     def hoverEnterEvent(self, event):
@@ -93,11 +100,13 @@ class NodeItem(QGraphicsEllipseItem):
             if value:
                 # Bright yellow/orange fill for selected
                 self.setBrush(QBrush(QColor(255, 255, 100)))
-                # Much thicker and red border
-                self.setPen(QPen(Qt.red, 0.08 * self.scale))
+                # Much thicker and red border (cosmetic pen)
+                pen = QPen(Qt.red, 3)
+                pen.setCosmetic(True)
+                self.setPen(pen)
                 # Add glow effect
                 shadow = QGraphicsDropShadowEffect()
-                shadow.setBlurRadius(0.2 * self.scale)
+                shadow.setBlurRadius(self.radius * 0.5)
                 shadow.setOffset(0, 0)
                 shadow.setColor(QColor(255, 0, 0, 200))
                 self.setGraphicsEffect(shadow)
@@ -151,8 +160,9 @@ class LinkItem(QGraphicsPathItem):
         self.link = link
         self.from_pos = from_pos
         self.to_pos = to_pos
-        self.scale = scale
-        self.normal_pen = QPen(Qt.gray, 0.5 * scale)
+        # Cosmetic pen - always 2 pixels regardless of zoom
+        self.normal_pen = QPen(Qt.gray, 2, Qt.SolidLine, Qt.RoundCap)
+        self.normal_pen.setCosmetic(True)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         self.setAcceptHoverEvents(True)
         
@@ -160,13 +170,13 @@ class LinkItem(QGraphicsPathItem):
         self.id_label = QGraphicsSimpleTextItem(self.link.id, self)
         self.id_label.setBrush(QBrush(Qt.black))
         self.id_label.setFont(QFont("Arial", 8))
-        self.id_label.setScale(scale)  # Scale text to match scene
+        self.id_label.setFlag(QGraphicsItem.ItemIgnoresTransformations) # Label ignores zoom
         self.id_label.setVisible(False)
         
         self.value_label = QGraphicsSimpleTextItem("", self)
         self.value_label.setBrush(QBrush(Qt.black))
         self.value_label.setFont(QFont("Arial", 8))
-        self.value_label.setScale(scale)  # Scale text to match scene
+        self.value_label.setFlag(QGraphicsItem.ItemIgnoresTransformations) # Label ignores zoom
         self.value_label.setVisible(False)
         
         self.update_path()
@@ -184,27 +194,20 @@ class LinkItem(QGraphicsPathItem):
         path = self.path()
         if path.elementCount() > 0:
             mid_point = path.pointAtPercent(0.5)
-            # Convert scene point to local coordinates if needed, but since LinkItem is a PathItem, 
-            # its local coordinates match the path definition.
-            # However, QGraphicsPathItem's origin is (0,0) usually.
-            # Let's just use the midpoint of the bounding rect for simplicity or calculate from path.
             
-            # Actually, for QGraphicsPathItem, the path is in local coordinates.
-            
-            # ID label slightly above midpoint
-            id_scale = self.id_label.scale()
+            # With ItemIgnoresTransformations, use fixed pixel offsets
             id_rect = self.id_label.boundingRect()
+            offset = 20  # Fixed pixels
+            
             self.id_label.setPos(
-                mid_point.x() - (id_rect.width() * id_scale / 2), 
-                mid_point.y() - (id_rect.height() * id_scale) - (5 * self.scale)
+                mid_point.x() - id_rect.width() / 2,
+                mid_point.y() - offset - id_rect.height()
             )
             
-            # Value label slightly below midpoint
-            val_scale = self.value_label.scale()
             val_rect = self.value_label.boundingRect()
             self.value_label.setPos(
-                mid_point.x() - (val_rect.width() * val_scale / 2), 
-                mid_point.y() + (5 * self.scale)
+                mid_point.x() - val_rect.width() / 2,
+                mid_point.y() + offset
             )
 
     def hoverEnterEvent(self, event):

@@ -579,3 +579,68 @@ class EPANETProject:
     def get_pump_energy(self, pump_id: str) -> float:
         """Get pump energy usage."""
         return self.engine.get_pump_energy(pump_id)
+
+    def import_map(self, filename: str) -> int:
+        """Import map coordinates from file.
+        
+        Args:
+            filename: Path to .map or .inp file
+            
+        Returns:
+            Number of nodes updated
+        """
+        try:
+            # Read file content
+            with open(filename, 'r') as f:
+                lines = f.readlines()
+            
+            # Check if file has sections
+            has_sections = any(line.strip().startswith('[') for line in lines)
+            
+            coords = {}
+            in_coords_section = False
+            
+            for line in lines:
+                line = line.strip()
+                if not line or line.startswith(';'):
+                    continue
+                
+                if line.startswith('['):
+                    if line.upper().startswith('[COORDINATES]'):
+                        in_coords_section = True
+                    else:
+                        in_coords_section = False
+                    continue
+                
+                # Parse coordinates if in section or if file has no sections (pure map file)
+                if in_coords_section or not has_sections:
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        node_id = parts[0]
+                        try:
+                            x = float(parts[1])
+                            y = float(parts[2])
+                            coords[node_id] = (x, y)
+                        except ValueError:
+                            continue
+            
+            # Update network nodes
+            updated_count = 0
+            for node_id, (x, y) in coords.items():
+                if node_id in self.network.nodes:
+                    node = self.network.nodes[node_id]
+                    node.x = x
+                    node.y = y
+                    updated_count += 1
+                    
+            # Update WNTR model if exists
+            if self.engine.wn:
+                for node_id, (x, y) in coords.items():
+                    if node_id in self.engine.wn.nodes:
+                        self.engine.wn.nodes[node_id].coordinates = (x, y)
+            
+            self.modified = True
+            return updated_count
+            
+        except Exception as e:
+            raise Exception(f"Failed to import map: {e}")

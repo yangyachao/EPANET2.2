@@ -1,7 +1,7 @@
 """Map widget for displaying and editing the network."""
 
 from PySide6.QtWidgets import QGraphicsView, QMenu
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QPainter
 from gui.graphics.scene import NetworkScene
 from .legend_widget import LegendWidget
@@ -47,11 +47,34 @@ class MapWidget(QGraphicsView):
 
     def fit_network(self):
         """Fit the view to the network extent."""
-        rect = self.scene.itemsBoundingRect()
-        if not rect.isNull():
-            # Add 10% margin on all sides
-            margin = max(rect.width(), rect.height()) * 0.1
+        # Calculate bounds strictly from NodeItems to avoid stray items at (0,0)
+        # causing issues for GPS coordinates (which are far from origin)
+        rect = QRectF()
+        has_nodes = False
+        
+        for item in self.scene.items():
+            from gui.graphics.items import NodeItem
+            if isinstance(item, NodeItem) and item.isVisible():
+                # Use mapRectToScene(item.rect()) to get the node's geometry ONLY,
+                # ignoring child items like labels which might be huge in scene units
+                # (especially when using ItemIgnoresTransformations)
+                node_rect = item.mapRectToScene(item.rect())
+                
+                if not has_nodes:
+                    rect = node_rect
+                    has_nodes = True
+                else:
+                    rect = rect.united(node_rect)
+        
+        if has_nodes and not rect.isNull():
+            # Add 5% margin on all sides
+            margin = max(rect.width(), rect.height()) * 0.05
+            
             rect.adjust(-margin, -margin, margin, margin)
+            self.fitInView(rect, Qt.KeepAspectRatio)
+        elif not self.scene.itemsBoundingRect().isNull():
+            # Fallback to standard method if no nodes found
+            rect = self.scene.itemsBoundingRect()
             self.fitInView(rect, Qt.KeepAspectRatio)
 
     def wheelEvent(self, event):

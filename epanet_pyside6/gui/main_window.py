@@ -233,6 +233,19 @@ class MainWindow(QMainWindow):
         run_action.setShortcut("F5")
         run_action.triggered.connect(self.run_simulation)
         project_menu.addAction(run_action)
+        # Edit Menu
+        edit_menu = menubar.addMenu("&Edit")
+        
+        select_all_action = QAction("Select &All", self)
+        select_all_action.setShortcut("Ctrl+A")
+        select_all_action.triggered.connect(self.select_all)
+        edit_menu.addAction(select_all_action)
+        
+        edit_menu.addSeparator()
+        
+        group_edit_action = QAction("&Group Edit...", self)
+        group_edit_action.triggered.connect(self.group_edit)
+        edit_menu.addAction(group_edit_action)
         
         # View Menu
         self.view_menu = menubar.addMenu("&View")
@@ -1387,6 +1400,99 @@ class MainWindow(QMainWindow):
         """Save window settings."""
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("windowState", self.saveState())
+        
+    # Edit Actions
+    
+    def select_all(self):
+        """Select all items in the map."""
+        if self.map_widget and self.map_widget.scene:
+            for item in self.map_widget.scene.items():
+                item.setSelected(True)
+                
+    def group_edit(self):
+        """Open group edit dialog."""
+        from gui.dialogs.group_edit_dialog import GroupEditDialog
+        
+        # Get selected items
+        selected_items = self.map_widget.scene.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Group Edit", "Please select objects to edit.")
+            return
+            
+        dialog = GroupEditDialog(self.project, selected_items, self)
+        if dialog.exec():
+            data = dialog.get_data()
+            self.apply_group_edit(data, selected_items)
+            
+    def apply_group_edit(self, data, selected_items):
+        """Apply group edit changes."""
+        obj_type = data['type']
+        prop = data['property']
+        op = data['operation']
+        val_str = data['value']
+        
+        try:
+            value = float(val_str) if prop not in ["Tag", "Initial Status"] else val_str
+        except ValueError:
+            if prop not in ["Tag", "Initial Status"]:
+                QMessageBox.warning(self, "Error", "Invalid numeric value.")
+                return
+                
+        count = 0
+        
+        # Map property names to attribute names
+        prop_map = {
+            "Tag": "tag",
+            "Elevation": "elevation",
+            "Base Demand": "base_demand",
+            "Initial Quality": "initial_quality",
+            "Initial Level": "init_level",
+            "Min Level": "min_level",
+            "Max Level": "max_level",
+            "Diameter": "diameter",
+            "Length": "length",
+            "Roughness": "roughness",
+            "Loss Coeff.": "minor_loss",
+            "Initial Status": "status",
+            "Setting": "setting",
+            "Total Head": "total_head"
+        }
+        
+        attr = prop_map.get(prop)
+        if not attr:
+            return
+            
+        for item in selected_items:
+            obj = None
+            if hasattr(item, 'node'):
+                obj = item.node
+            elif hasattr(item, 'link'):
+                obj = item.link
+                
+            if not obj:
+                continue
+                
+            # Check type match (simple check)
+            # Ideally strictly check against obj_type
+            
+            if hasattr(obj, attr):
+                current_val = getattr(obj, attr)
+                new_val = value
+                
+                if op == "Multiply" and isinstance(current_val, (int, float)):
+                    new_val = current_val * value
+                elif op == "Add" and isinstance(current_val, (int, float)):
+                    new_val = current_val + value
+                    
+                setattr(obj, attr, new_val)
+                count += 1
+                
+        if count > 0:
+            self.project.modified = True
+            self.browser_widget.refresh()
+            self.status_bar.showMessage(f"Updated {count} objects.")
+        else:
+            self.status_bar.showMessage("No objects updated.")
     
     def closeEvent(self, event):
         """Handle window close event."""

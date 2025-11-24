@@ -96,7 +96,11 @@ class NodeItem(QGraphicsEllipseItem):
                 # Much thicker and red border
                 self.setPen(QPen(Qt.red, 0.08 * self.scale))
                 # Add glow effect
-                self.setGraphicsEffect(self.shadow)
+                shadow = QGraphicsDropShadowEffect()
+                shadow.setBlurRadius(0.2 * self.scale)
+                shadow.setOffset(0, 0)
+                shadow.setColor(QColor(255, 0, 0, 200))
+                self.setGraphicsEffect(shadow)
             else:
                 # Return to normal
                 self.setBrush(QBrush(self.normal_color))
@@ -171,12 +175,6 @@ class LinkItem(QGraphicsPathItem):
         self.setPen(self.normal_pen)
         self.setToolTip(f"{link.id}\nType: {link.link_type.name}")
         
-        # Add shadow effect for selected state
-        self.shadow = QGraphicsDropShadowEffect()
-        self.shadow.setBlurRadius(0.2 * scale)
-        self.shadow.setOffset(0, 0)
-        self.shadow.setColor(QColor(255, 0, 0, 220))
-        
         # Position labels
         self.update_label_positions()
 
@@ -226,7 +224,13 @@ class LinkItem(QGraphicsPathItem):
                 # Much thicker and bright red when selected, plus glow
                 pen = QPen(Qt.red, 0.8 * self.scale)
                 self.setPen(pen)
-                self.setGraphicsEffect(self.shadow)
+                
+                shadow = QGraphicsDropShadowEffect()
+                shadow.setBlurRadius(0.2 * self.scale)
+                shadow.setOffset(0, 0)
+                shadow.setColor(QColor(255, 0, 0, 220))
+                self.setGraphicsEffect(shadow)
+                
                 # Raise z-value to draw on top
                 self.setZValue(10)
             else:

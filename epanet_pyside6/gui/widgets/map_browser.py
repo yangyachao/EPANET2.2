@@ -34,21 +34,23 @@ class MapBrowser(QWidget):
         view_layout.addWidget(QLabel("Nodes:"))
         self.node_combo = QComboBox()
         self.node_combo.addItems([
-            "None", "Elevation", "Base Demand", "Initial Quality",
-            "Demand", "Head", "Pressure", "Quality"
+            "NONE", "ELEVATION", "BASEDEMAND", "INITIALQUALITY",
+            "DEMAND", "HEAD", "PRESSURE", "QUALITY"
         ])
         self.node_combo.currentTextChanged.connect(self.on_node_param_changed)
+        self.node_combo.setCurrentText("PRESSURE")
         view_layout.addWidget(self.node_combo)
         
         # Link parameter
         view_layout.addWidget(QLabel("Links:"))
         self.link_combo = QComboBox()
         self.link_combo.addItems([
-            "None", "Length", "Diameter", "Roughness",
-            "Flow", "Velocity", "Unit Headloss", "Friction Factor",
-            "Reaction Rate", "Quality"
+            "NONE", "LENGTH", "DIAMETER", "ROUGHNESS",
+            "FLOW", "VELOCITY", "UNITHEADLOSS", "FRICTIONFACTOR",
+            "REACTIONRATE", "QUALITY"
         ])
         self.link_combo.currentTextChanged.connect(self.on_link_param_changed)
+        self.link_combo.setCurrentText("FLOW")
         view_layout.addWidget(self.link_combo)
         
         layout.addWidget(view_group)

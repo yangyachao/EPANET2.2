@@ -121,6 +121,12 @@ class GraphSelectionDialog(QDialog):
             for param in LinkParam:
                 self.param_combo.addItem(param.name, param)
                 
+        # Select default parameter (Pressure for Nodes, Flow for Links)
+        default_param = NodeParam.PRESSURE if is_node else LinkParam.FLOW
+        index = self.param_combo.findData(default_param)
+        if index >= 0:
+            self.param_combo.setCurrentIndex(index)
+                
         # Update object list
         self.obj_list.clear()
         if is_node:

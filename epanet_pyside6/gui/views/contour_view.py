@@ -6,7 +6,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.tri as tri
 import numpy as np
-from core.constants import NodeParam
+from core.constants import NodeParam, LinkParam
 
 class ContourView(QWidget):
     """Widget for displaying contour plots of network data."""
@@ -30,7 +30,10 @@ class ContourView(QWidget):
         
         self.param_combo = QComboBox()
         for param in NodeParam:
-            self.param_combo.addItem(param.name, param)
+            self.param_combo.addItem(f"Node: {param.name}", param)
+        for param in LinkParam:
+            self.param_combo.addItem(f"Link: {param.name}", param)
+            
         self.param_combo.currentTextChanged.connect(self.refresh_plot)
         
         controls_layout.addWidget(QLabel("Parameter:"))
@@ -100,7 +103,7 @@ class ContourView(QWidget):
         if not param:
             return
             
-        # Get node data
+        # Get data
         x_coords = []
         y_coords = []
         values = []
@@ -112,39 +115,77 @@ class ContourView(QWidget):
         if has_results:
             current_values = self.project.get_network_values_at_time(param, self.current_time_index)
         
-        for node in self.project.network.nodes.values():
-            x_coords.append(node.x)
-            y_coords.append(node.y)
+        if isinstance(param, NodeParam):
+            # Process Nodes
+            for node in self.project.network.nodes.values():
+                x_coords.append(node.x)
+                y_coords.append(node.y)
+                
+                val = 0.0
+                if has_results and node.id in current_values:
+                    val = current_values[node.id]
+                else:
+                    # Fallback for input parameters or no results
+                    if param == NodeParam.ELEVATION:
+                        val = node.elevation
+                    elif param == NodeParam.DEMAND:
+                        if hasattr(node, 'base_demand'):
+                            val = node.base_demand
+                    elif param == NodeParam.HEAD:
+                        val = node.head # Should be base head if no results
+                    elif param == NodeParam.PRESSURE:
+                        val = node.pressure
+                    elif param == NodeParam.QUALITY:
+                        val = node.quality
+                
+                values.append(val)
+                
+        elif isinstance(param, LinkParam):
+            # Process Links (use midpoints)
+            for link in self.project.network.links.values():
+                # Get start and end nodes
+                if link.from_node in self.project.network.nodes and link.to_node in self.project.network.nodes:
+                    n1 = self.project.network.nodes[link.from_node]
+                    n2 = self.project.network.nodes[link.to_node]
+                    
+                    # Midpoint
+                    mid_x = (n1.x + n2.x) / 2
+                    mid_y = (n1.y + n2.y) / 2
+                    
+                    x_coords.append(mid_x)
+                    y_coords.append(mid_y)
+                    
+                    val = 0.0
+                    if has_results and link.id in current_values:
+                        val = current_values[link.id]
+                    else:
+                        # Fallback
+                        if param == LinkParam.LENGTH:
+                            val = link.length
+                        elif param == LinkParam.DIAMETER:
+                            val = link.diameter
+                        elif param == LinkParam.ROUGHNESS:
+                            val = link.roughness
+                        elif param == LinkParam.FLOW:
+                            val = link.flow
+                        elif param == LinkParam.VELOCITY:
+                            val = link.velocity
+                        elif param == LinkParam.HEADLOSS:
+                            val = link.headloss
+                            
+                    values.append(val)
             
-            val = 0.0
-            if has_results and node.id in current_values:
-                val = current_values[node.id]
-            else:
-                # Fallback for input parameters or no results
-                if param == NodeParam.ELEVATION:
-                    val = node.elevation
-                elif param == NodeParam.DEMAND:
-                    if hasattr(node, 'base_demand'):
-                        val = node.base_demand
-                elif param == NodeParam.HEAD:
-                    val = node.head # Should be base head if no results
-                elif param == NodeParam.PRESSURE:
-                    val = node.pressure
-                elif param == NodeParam.QUALITY:
-                    val = node.quality
-            
-            values.append(val)
-            
-        if not x_coords:
+        if not x_coords or len(x_coords) < 3:
+            self.ax.text(0.5, 0.5, "Not enough data points for contour", 
+                        ha='center', va='center', transform=self.ax.transAxes)
             self.canvas.draw()
             return
             
         # Create triangulation
-        triang = tri.Triangulation(x_coords, y_coords)
-        
-        # Plot contours
         try:
-            # Use tricontourf
+            triang = tri.Triangulation(x_coords, y_coords)
+            
+            # Plot contours
             # Determine levels based on value range
             min_val = min(values)
             max_val = max(values)
@@ -163,8 +204,8 @@ class ContourView(QWidget):
             
             self.ax.set_aspect('equal')
             
-            # Plot node locations
-            self.ax.plot(x_coords, y_coords, 'ko', ms=2, alpha=0.5)
+            # Plot locations (nodes or midpoints)
+            self.ax.plot(x_coords, y_coords, 'k.', ms=1, alpha=0.3)
             
         except Exception as e:
             self.ax.text(0.5, 0.5, f"Error plotting contour: {str(e)}", 

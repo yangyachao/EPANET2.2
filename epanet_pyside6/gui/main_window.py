@@ -344,36 +344,6 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
     
-    def create_cursor_icon(self):
-        """Create a custom mouse cursor icon."""
-        pixmap = QPixmap(32, 32)
-        pixmap.fill(Qt.transparent)
-        
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        # Draw arrow shape
-        polygon = QPolygonF([
-            QPointF(8, 4),    # Tip
-            QPointF(8, 24),   # Bottom left
-            QPointF(13, 19),  # Inner corner
-            QPointF(17, 27),  # Tail bottom left
-            QPointF(20, 25),  # Tail bottom right
-            QPointF(16, 17),  # Tail top
-            QPointF(23, 17),  # Right corner
-        ])
-        
-        # Fill white with black border
-        path = QPainterPath()
-        path.addPolygon(polygon)
-        
-        painter.setPen(QPen(Qt.black, 1.5, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-        painter.setBrush(Qt.white)
-        painter.drawPath(path)
-        
-        painter.end()
-        return QIcon(pixmap)
-
     def create_icon_from_text(self, text, color=Qt.black):
         """Create a QIcon from a text character."""
         pixmap = QPixmap(32, 32)
@@ -400,15 +370,18 @@ class MainWindow(QMainWindow):
         self.addToolBar(self.std_toolbar)
         
         # File Actions
-        new_action = QAction(self.style().standardIcon(QStyle.SP_FileIcon), "New", self)
+        # New
+        new_action = QAction(self.create_icon_from_text("📄"), "New", self)
         new_action.triggered.connect(self.new_project)
         self.std_toolbar.addAction(new_action)
         
-        open_action = QAction(self.style().standardIcon(QStyle.SP_DialogOpenButton), "Open", self)
+        # Open
+        open_action = QAction(self.create_icon_from_text("📂"), "Open", self)
         open_action.triggered.connect(self.open_project)
         self.std_toolbar.addAction(open_action)
         
-        save_action = QAction(self.style().standardIcon(QStyle.SP_DialogSaveButton), "Save", self)
+        # Save
+        save_action = QAction(self.create_icon_from_text("💾"), "Save", self)
         save_action.triggered.connect(self.save_project)
         self.std_toolbar.addAction(save_action)
         
@@ -416,8 +389,7 @@ class MainWindow(QMainWindow):
         
         # View modes
         # Select (Arrow)
-        # Use a custom icon for Select (Mouse Pointer)
-        self.select_action.setIcon(self.create_cursor_icon())
+        self.select_action.setIcon(self.create_icon_from_text("↖️"))
         self.select_action.setText("Select")
         self.std_toolbar.addAction(self.select_action)
         
@@ -430,35 +402,35 @@ class MainWindow(QMainWindow):
         self.std_toolbar.addSeparator()
         
         # Run
-        run_action = QAction(self.style().standardIcon(QStyle.SP_MediaPlay), "Run", self)
+        run_action = QAction(self.create_icon_from_text("▶️"), "Run", self)
         run_action.triggered.connect(self.run_simulation)
         self.std_toolbar.addAction(run_action)
         
         self.std_toolbar.addSeparator()
         
         # Reporting
-        graph_action = QAction(self.style().standardIcon(QStyle.SP_FileDialogListView), "Graph", self)
+        graph_action = QAction(self.create_icon_from_text("📈"), "Graph", self)
         graph_action.triggered.connect(self.create_graph)
         self.std_toolbar.addAction(graph_action)
         
-        table_action = QAction(self.style().standardIcon(QStyle.SP_FileDialogDetailedView), "Table", self)
+        table_action = QAction(self.create_icon_from_text("📋"), "Table", self)
         table_action.triggered.connect(self.create_table)
         self.std_toolbar.addAction(table_action)
         
         # Others (keep text or find icons)
-        contour_action = QAction("Contour", self) # No good icon
+        contour_action = QAction(self.create_icon_from_text("🎨"), "Contour", self) 
         contour_action.triggered.connect(self.create_contour)
         self.std_toolbar.addAction(contour_action)
         
-        status_action = QAction(self.style().standardIcon(QStyle.SP_MessageBoxInformation), "Status", self)
+        status_action = QAction(self.create_icon_from_text("ℹ️"), "Status", self)
         status_action.triggered.connect(self.create_status)
         self.std_toolbar.addAction(status_action)
         
-        calib_action = QAction("Calibration", self)
+        calib_action = QAction(self.create_icon_from_text("🎯"), "Calibration", self)
         calib_action.triggered.connect(self.create_calibration)
         self.std_toolbar.addAction(calib_action)
         
-        energy_action = QAction("Energy", self)
+        energy_action = QAction(self.create_icon_from_text("⚡"), "Energy", self)
         energy_action.triggered.connect(self.create_energy)
         self.std_toolbar.addAction(energy_action)
     
@@ -1234,7 +1206,9 @@ class MainWindow(QMainWindow):
             param_map = {
                 "elevation": "elevation", # usually property, not result, but handled
                 "base demand": "base_demand",
+                "basedemand": "base_demand",
                 "initial quality": "initial_quality",
+                "initialquality": "initial_quality",
                 "demand": "demand",
                 "head": "head",
                 "pressure": "pressure",
@@ -1296,8 +1270,11 @@ class MainWindow(QMainWindow):
                 "flow": "flowrate",
                 "velocity": "velocity",
                 "unit headloss": "headloss", # check this
+                "unitheadloss": "headloss",
                 "friction factor": "friction_factor",
+                "frictionfactor": "friction_factor",
                 "reaction rate": "reaction_rate",
+                "reactionrate": "reaction_rate",
                 "quality": "quality"
             }
             wntr_param = param_map.get(param, param)

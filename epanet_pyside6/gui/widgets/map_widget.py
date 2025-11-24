@@ -47,33 +47,43 @@ class MapWidget(QGraphicsView):
 
     def fit_network(self):
         """Fit the view to the network extent."""
-        # Calculate bounds strictly from NodeItems to avoid stray items at (0,0)
-        # causing issues for GPS coordinates (which are far from origin)
-        rect = QRectF()
+        # Calculate bounds from node positions
+        if not self.scene.node_items:
+            return
+            
+        min_x = float('inf')
+        min_y = float('inf')
+        max_x = float('-inf')
+        max_y = float('-inf')
+        
         has_nodes = False
         
-        for item in self.scene.items():
-            from gui.graphics.items import NodeItem
-            if isinstance(item, NodeItem) and item.isVisible():
-                # Use mapRectToScene(item.rect()) to get the node's geometry ONLY,
-                # ignoring child items like labels which might be huge in scene units
-                # (especially when using ItemIgnoresTransformations)
-                node_rect = item.mapRectToScene(item.rect())
-                
-                if not has_nodes:
-                    rect = node_rect
-                    has_nodes = True
-                else:
-                    rect = rect.united(node_rect)
+        for item in self.scene.node_items.values():
+            if item.isVisible():
+                pos = item.pos()
+                min_x = min(min_x, pos.x())
+                min_y = min(min_y, pos.y())
+                max_x = max(max_x, pos.x())
+                max_y = max(max_y, pos.y())
+                has_nodes = True
         
-        if has_nodes and not rect.isNull():
+        if has_nodes:
+            rect = QRectF(min_x, min_y, max_x - min_x, max_y - min_y)
+            
             # Add 5% margin on all sides
+            # Ensure rect has some size
+            if rect.width() == 0:
+                rect.adjust(-10, 0, 10, 0)
+            if rect.height() == 0:
+                rect.adjust(0, -10, 0, 10)
+                
             margin = max(rect.width(), rect.height()) * 0.05
+            if margin == 0: margin = 10
             
             rect.adjust(-margin, -margin, margin, margin)
             self.fitInView(rect, Qt.KeepAspectRatio)
         elif not self.scene.itemsBoundingRect().isNull():
-            # Fallback to standard method if no nodes found
+            # Fallback
             rect = self.scene.itemsBoundingRect()
             self.fitInView(rect, Qt.KeepAspectRatio)
 

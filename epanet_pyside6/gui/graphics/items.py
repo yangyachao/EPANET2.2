@@ -2,24 +2,31 @@
 
 from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsItem, QGraphicsDropShadowEffect, QGraphicsSimpleTextItem
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPainter, QFont
+from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPainter, QFont, QTransform
 
 class NodeItem(QGraphicsEllipseItem):
-    """Base class for node graphics items."""
+    """Base class for node graphics items.
     
-    def __init__(self, node, radius=1.0, scale=1.0, max_y=0):
-        # Apply scale to radius for adaptive sizing
-        scaled_radius = radius * scale
-        super().__init__(-scaled_radius, -scaled_radius, scaled_radius*2, scaled_radius*2)
+    Uses ItemIgnoresTransformations to maintain constant screen size.
+    """
+    
+    def __init__(self, node, radius=3.0, max_y=0):
+        # Radius is now in pixels, not world coordinates
+        super().__init__(-radius, -radius, radius*2, radius*2)
         self.node = node
-        self.radius = scaled_radius
-        self.scale = scale
+        self.radius = radius
         self.max_y = max_y
         self.normal_color = Qt.white
+        
         # Cosmetic pen (width=0) - always 1 pixel regardless of zoom
         self.normal_pen = QPen(Qt.black, 0)
+        
         # Flip Y coordinate: EPANET Y goes up, Qt Y goes down
         self.setPos(node.x, max_y - node.y)
+        
+        # Critical: Ignore transformations (zoom) to keep fixed size
+        self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
@@ -32,7 +39,7 @@ class NodeItem(QGraphicsEllipseItem):
         
         # Add shadow effect for selected state
         self.shadow = QGraphicsDropShadowEffect()
-        self.shadow.setBlurRadius(0.2 * scale)
+        self.shadow.setBlurRadius(5) # Fixed pixel blur
         self.shadow.setOffset(0, 0)
         self.shadow.setColor(QColor(255, 0, 0, 200))
         
@@ -40,21 +47,11 @@ class NodeItem(QGraphicsEllipseItem):
         self.id_label = QGraphicsSimpleTextItem(self.node.id, self)
         self.id_label.setBrush(QBrush(Qt.black))
         self.id_label.setFont(QFont("Arial", 8))
-        self.id_label.setScale(scale)  # Scale text to match scene
         self.id_label.setVisible(False)
         
         self.value_label = QGraphicsSimpleTextItem("", self)
         self.value_label.setBrush(QBrush(Qt.black))
         self.value_label.setFont(QFont("Arial", 8))
-        self.value_label.setScale(scale)  # Scale text to match scene
-        self.value_label.setVisible(False)
-        self.id_label.setFlag(QGraphicsItem.ItemIgnoresTransformations) # Label ignores zoom
-        self.id_label.setVisible(False)
-        
-        self.value_label = QGraphicsSimpleTextItem("", self)
-        self.value_label.setBrush(QBrush(Qt.black))
-        self.value_label.setFont(QFont("Arial", 8))
-        self.value_label.setFlag(QGraphicsItem.ItemIgnoresTransformations) # Label ignores zoom
         self.value_label.setVisible(False)
         
         # Position labels
@@ -62,15 +59,19 @@ class NodeItem(QGraphicsEllipseItem):
 
     def update_label_positions(self):
         """Update positions of text labels."""
-        # With ItemIgnoresTransformations, labels are in screen pixels
-        # Use fixed pixel offset from node
+        # Labels are in screen pixels relative to node center
+        
+        # ID Label (Top Left-ish or just Above)
         id_rect = self.id_label.boundingRect()
-        offset = 20  # Fixed pixels above node
+        offset = self.radius + 2 # Pixels
+        
+        # Center horizontally, place above
         self.id_label.setPos(
             -id_rect.width() / 2,
             -offset - id_rect.height()
         )
         
+        # Value Label (Below)
         val_rect = self.value_label.boundingRect()
         self.value_label.setPos(
             -val_rect.width() / 2,
@@ -96,22 +97,15 @@ class NodeItem(QGraphicsEllipseItem):
             if hasattr(self.scene(), "update_connected_links"):
                 self.scene().update_connected_links(self.node.id)
         elif change == QGraphicsItem.ItemSelectedChange:
-            # Highlight when selected - brighter, thicker border, shadow
+            # Highlight when selected
             if value:
-                # Bright yellow/orange fill for selected
                 self.setBrush(QBrush(QColor(255, 255, 100)))
-                # Much thicker and red border (cosmetic pen)
-                pen = QPen(Qt.red, 3)
+                # Thicker border
+                pen = QPen(Qt.red, 2)
                 pen.setCosmetic(True)
                 self.setPen(pen)
-                # Add glow effect
-                shadow = QGraphicsDropShadowEffect()
-                shadow.setBlurRadius(self.radius * 0.5)
-                shadow.setOffset(0, 0)
-                shadow.setColor(QColor(255, 0, 0, 200))
-                self.setGraphicsEffect(shadow)
+                self.setGraphicsEffect(self.shadow)
             else:
-                # Return to normal
                 self.setBrush(QBrush(self.normal_color))
                 self.setPen(self.normal_pen)
                 self.setGraphicsEffect(None)
@@ -127,42 +121,40 @@ class NodeItem(QGraphicsEllipseItem):
 class JunctionItem(NodeItem):
     """Graphics item for Junction."""
     
-    def __init__(self, node, scale=1.0, max_y=0):
-        super().__init__(node, radius=1.0, scale=scale, max_y=max_y)
+    def __init__(self, node, max_y=0):
+        super().__init__(node, radius=3.0, max_y=max_y)
         self.normal_color = QColor(0, 120, 255)  # Brighter blue
         self.setBrush(QBrush(self.normal_color))
 
 class ReservoirItem(NodeItem):
     """Graphics item for Reservoir."""
     
-    def __init__(self, node, scale=1.0, max_y=0):
-        super().__init__(node, radius=1.5, scale=scale, max_y=max_y)
+    def __init__(self, node, max_y=0):
+        super().__init__(node, radius=5.0, max_y=max_y)
         self.normal_color = QColor(0, 200, 0)  # Green
         self.setBrush(QBrush(self.normal_color))
-        r = 1.5 * scale
-        self.setRect(-r, -r, r*2, r*2)
 
 class TankItem(NodeItem):
     """Graphics item for Tank."""
     
-    def __init__(self, node, scale=1.0, max_y=0):
-        super().__init__(node, radius=1.2, scale=scale, max_y=max_y)
+    def __init__(self, node, max_y=0):
+        super().__init__(node, radius=4.0, max_y=max_y)
         self.normal_color = QColor(255, 200, 0)  # Brighter yellow
         self.setBrush(QBrush(self.normal_color))
-        r = 1.2 * scale
-        self.setRect(-r, -r, r*2, r*2)
 
 class LinkItem(QGraphicsPathItem):
     """Base class for link graphics items."""
     
-    def __init__(self, link, from_pos, to_pos, scale=1.0):
+    def __init__(self, link, from_pos, to_pos):
         super().__init__()
         self.link = link
         self.from_pos = from_pos
         self.to_pos = to_pos
-        # Cosmetic pen - always 2 pixels regardless of zoom
-        self.normal_pen = QPen(Qt.gray, 2, Qt.SolidLine, Qt.RoundCap)
+        
+        # Cosmetic pen - fixed pixel width
+        self.normal_pen = QPen(Qt.gray, 1, Qt.SolidLine, Qt.RoundCap)
         self.normal_pen.setCosmetic(True)
+        
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         self.setAcceptHoverEvents(True)
         
@@ -170,22 +162,20 @@ class LinkItem(QGraphicsPathItem):
         self.id_label = QGraphicsSimpleTextItem(self.link.id, self)
         self.id_label.setBrush(QBrush(Qt.black))
         self.id_label.setFont(QFont("Arial", 8))
-        self.id_label.setFlag(QGraphicsItem.ItemIgnoresTransformations) # Label ignores zoom
+        self.id_label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
         self.id_label.setVisible(False)
         
         self.value_label = QGraphicsSimpleTextItem("", self)
         self.value_label.setBrush(QBrush(Qt.black))
         self.value_label.setFont(QFont("Arial", 8))
-        self.value_label.setFlag(QGraphicsItem.ItemIgnoresTransformations) # Label ignores zoom
+        self.value_label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
         self.value_label.setVisible(False)
         
         self.update_path()
         
-        # Default style - much thicker lines (5x)
         self.setPen(self.normal_pen)
         self.setToolTip(f"{link.id}\nType: {link.link_type.name}")
         
-        # Position labels
         self.update_label_positions()
 
     def update_label_positions(self):
@@ -195,20 +185,35 @@ class LinkItem(QGraphicsPathItem):
         if path.elementCount() > 0:
             mid_point = path.pointAtPercent(0.5)
             
-            # With ItemIgnoresTransformations, use fixed pixel offsets
-            id_rect = self.id_label.boundingRect()
-            offset = 20  # Fixed pixels
+            self.id_label.setPos(mid_point)
+            self.value_label.setPos(mid_point)
             
-            self.id_label.setPos(
-                mid_point.x() - id_rect.width() / 2,
-                mid_point.y() - offset - id_rect.height()
-            )
+            id_rect = self.id_label.boundingRect()
+            offset = 10 # Pixels
+            
+            # Adjust position to center text
+            # Set position to the exact midpoint (Scene coordinates)
+            self.id_label.setPos(mid_point)
+            self.value_label.setPos(mid_point)
+            
+            # Use QTransform to offset in pixels (screen space)
+            # This works because ItemIgnoresTransformations is set
+            
+            id_rect = self.id_label.boundingRect()
+            offset = 10 # Pixels
+            
+            # Center horizontally, place above
+            self.id_label.setTransform(QTransform().translate(
+                -id_rect.width() / 2,
+                -offset - id_rect.height()
+            ))
             
             val_rect = self.value_label.boundingRect()
-            self.value_label.setPos(
-                mid_point.x() - val_rect.width() / 2,
-                mid_point.y() + offset
-            )
+            # Center horizontally, place below
+            self.value_label.setTransform(QTransform().translate(
+                -val_rect.width() / 2,
+                offset
+            ))
 
     def hoverEnterEvent(self, event):
         """Change cursor to pointing hand when hovering."""
@@ -224,20 +229,19 @@ class LinkItem(QGraphicsPathItem):
         """Handle selection highlight."""
         if change == QGraphicsItem.ItemSelectedChange:
             if value:
-                # Much thicker and bright red when selected, plus glow
-                pen = QPen(Qt.red, 0.8 * self.scale)
+                # Thicker red pen
+                pen = QPen(Qt.red, 3)
+                pen.setCosmetic(True)
                 self.setPen(pen)
                 
                 shadow = QGraphicsDropShadowEffect()
-                shadow.setBlurRadius(0.2 * self.scale)
+                shadow.setBlurRadius(5)
                 shadow.setOffset(0, 0)
                 shadow.setColor(QColor(255, 0, 0, 220))
                 self.setGraphicsEffect(shadow)
                 
-                # Raise z-value to draw on top
                 self.setZValue(10)
             else:
-                # Reset to default
                 self.setPen(self.normal_pen)
                 self.setGraphicsEffect(None)
                 self.setZValue(0)
@@ -246,7 +250,8 @@ class LinkItem(QGraphicsPathItem):
     def set_color(self, color):
         """Set the link color."""
         if color:
-            pen = QPen(color, 0.5 * self.scale)
+            pen = QPen(color, self.normal_pen.widthF())
+            pen.setCosmetic(True)
             self.setPen(pen)
         else:
             self.setPen(self.normal_pen)
@@ -265,21 +270,24 @@ class LinkItem(QGraphicsPathItem):
 
 class PipeItem(LinkItem):
     """Graphics item for Pipe."""
-    def __init__(self, link, from_pos, to_pos, scale=1.0):
-        super().__init__(link, from_pos, to_pos, scale=scale)
-        self.normal_pen = QPen(Qt.darkGray, 0.5 * scale)
+    def __init__(self, link, from_pos, to_pos):
+        super().__init__(link, from_pos, to_pos)
+        self.normal_pen = QPen(Qt.darkGray, 1)
+        self.normal_pen.setCosmetic(True)
         self.setPen(self.normal_pen)
 
 class PumpItem(LinkItem):
     """Graphics item for Pump."""
-    def __init__(self, link, from_pos, to_pos, scale=1.0):
-        super().__init__(link, from_pos, to_pos, scale=scale)
-        self.normal_pen = QPen(QColor(255, 140, 0), 0.6 * scale)  # Darker orange
+    def __init__(self, link, from_pos, to_pos):
+        super().__init__(link, from_pos, to_pos)
+        self.normal_pen = QPen(QColor(255, 140, 0), 2)  # Thicker for pumps
+        self.normal_pen.setCosmetic(True)
         self.setPen(self.normal_pen)
 
 class ValveItem(LinkItem):
     """Graphics item for Valve."""
-    def __init__(self, link, from_pos, to_pos, scale=1.0):
-        super().__init__(link, from_pos, to_pos, scale=scale)
-        self.normal_pen = QPen(QColor(220, 20, 60), 0.5 * scale)  # Crimson red
+    def __init__(self, link, from_pos, to_pos):
+        super().__init__(link, from_pos, to_pos)
+        self.normal_pen = QPen(QColor(220, 20, 60), 2)  # Thicker for valves
+        self.normal_pen.setCosmetic(True)
         self.setPen(self.normal_pen)

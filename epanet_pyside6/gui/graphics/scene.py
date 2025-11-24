@@ -2,7 +2,7 @@
 
 from PySide6.QtWidgets import QGraphicsScene
 from PySide6.QtCore import Qt, Signal, QRectF
-from PySide6.QtGui import QPen, QColor, QBrush, QPixmap
+from PySide6.QtGui import QPen, QColor, QBrush, QPixmap, QFont
 from .items import JunctionItem, ReservoirItem, TankItem, PipeItem, PumpItem, ValveItem
 from core.constants import NodeType, LinkType
 
@@ -22,7 +22,6 @@ class NetworkScene(QGraphicsScene):
         self.setBackgroundBrush(QBrush(Qt.white))
         
         self.selectionChanged.connect(self.on_selection_changed)
-        self.node_scale = 1.0  # Will be calculated based on network bounds
         self.load_network()
 
     def update_scene_rect(self):
@@ -89,9 +88,6 @@ class NetworkScene(QGraphicsScene):
         if not network.nodes:
             return
         
-        # Calculate adaptive node size based on network bounds
-        self.node_scale = self._calculate_node_scale(network)
-        
         # Calculate Y-axis flip (EPANET Y goes up, Qt Y goes down)
         if network.nodes:
             self.max_y = max(node.y for node in network.nodes.values())
@@ -101,11 +97,11 @@ class NetworkScene(QGraphicsScene):
         # Add Nodes (with Y-axis flipping)
         for node in network.nodes.values():
             if node.node_type == NodeType.JUNCTION:
-                item = JunctionItem(node, scale=self.node_scale, max_y=self.max_y)
+                item = JunctionItem(node, max_y=self.max_y)
             elif node.node_type == NodeType.RESERVOIR:
-                item = ReservoirItem(node, scale=self.node_scale, max_y=self.max_y)
+                item = ReservoirItem(node, max_y=self.max_y)
             elif node.node_type == NodeType.TANK:
-                item = TankItem(node, scale=self.node_scale, max_y=self.max_y)
+                item = TankItem(node, max_y=self.max_y)
             else:
                 continue
                 
@@ -121,11 +117,11 @@ class NetworkScene(QGraphicsScene):
             to_pos = self.node_items[link.to_node].pos()
             
             if link.link_type == LinkType.PIPE:
-                item = PipeItem(link, from_pos, to_pos, scale=self.node_scale)
+                item = PipeItem(link, from_pos, to_pos)
             elif link.link_type == LinkType.PUMP:
-                item = PumpItem(link, from_pos, to_pos, scale=self.node_scale)
+                item = PumpItem(link, from_pos, to_pos)
             else: # Valve
-                item = ValveItem(link, from_pos, to_pos, scale=self.node_scale)
+                item = ValveItem(link, from_pos, to_pos)
                 
             self.addItem(item)
             self.link_items[link.id] = item
@@ -185,14 +181,6 @@ class NetworkScene(QGraphicsScene):
                 
     def _get_color_for_value(self, value, colors, intervals):
         """Get color for a value based on legend intervals."""
-        # Simple interval matching
-        # intervals: [0, 25, 50, 75, 100]
-        # colors: [blue, cyan, green, yellow, red]
-        # value < 0 -> blue
-        # 0 <= value < 25 -> blue
-        # 25 <= value < 50 -> cyan
-        # ...
-        
         if value <= intervals[0]:
             return colors[0]
         if value >= intervals[-1]:
@@ -203,37 +191,6 @@ class NetworkScene(QGraphicsScene):
                 return colors[i]
                 
         return colors[-1]
-    
-    def _calculate_node_scale(self, network):
-        """Calculate appropriate node scale based on network bounds.
-        
-        Returns a scale factor that makes nodes ~1% of the smaller dimension.
-        """
-        if not network.nodes:
-            return 1.0
-        
-        # Get network bounds
-        min_x = min(node.x for node in network.nodes.values())
-        max_x = max(node.x for node in network.nodes.values())
-        min_y = min(node.y for node in network.nodes.values())
-        max_y = max(node.y for node in network.nodes.values())
-        
-        # Calculate dimensions
-        width = max_x - min_x
-        height = max_y - min_y
-        
-        # Avoid division by zero
-        if width == 0 or height == 0:
-            return 1.0
-        
-        # Node size should be ~1.5% of the smaller dimension for better visibility
-        smaller_dim = min(width, height)
-        scale = smaller_dim * 0.015
-        
-        # Minimal floor to avoid zero, but allow very small scales for GPS coords
-        min_scale = 1e-5
-            
-        return max(scale, min_scale)
     
     def set_backdrop(self, image_path, ul_x, ul_y, lr_x, lr_y):
         """Set backdrop image."""
@@ -255,13 +212,8 @@ class NetworkScene(QGraphicsScene):
         self.backdrop_item.setZValue(-100) # Ensure it's at the bottom
         
         # Scale and position
-        # EPANET coordinates: Y increases upwards
-        # Qt coordinates: Y increases downwards
-        # We need to map UL (x1, y1) and LR (x2, y2) from EPANET to Qt scene
-        
-        # Calculate width and height in world coordinates
         world_w = abs(lr_x - ul_x)
-        world_h = abs(ul_y - lr_y) # y1 is top (max y), y2 is bottom (min y)
+        world_h = abs(ul_y - lr_y)
         
         if world_w == 0 or world_h == 0:
             return
@@ -276,53 +228,12 @@ class NetworkScene(QGraphicsScene):
         # Apply transformation
         self.backdrop_item.resetTransform()
         
-        # Position:
-        # In our scene, we flip Y. So max_y (ul_y) corresponds to smaller scene Y (top).
-        # Actually, our scene uses (x, max_y - y).
-        # Let's assume the scene's coordinate system is already set up such that
-        # we just need to place the image at the correct location.
-        
-        # Wait, the NodeItems are placed at (x, max_y - y).
-        # So the scene origin (0,0) is at (0, max_y).
-        # We need to find where (ul_x, ul_y) maps to.
-        # scene_x = ul_x
-        # scene_y = self.max_y - ul_y
-        
-        # We need self.max_y which is calculated in load_network.
-        # But load_network might not have run or max_y might be different.
-        # Let's use the max_y from the current network bounds if available.
-        
-        # For simplicity, let's assume the backdrop coordinates define the rect.
-        # We place the pixmap at (ul_x, self.max_y - ul_y) and scale it.
-        # But wait, the image needs to be flipped vertically? 
-        # No, QGraphicsPixmapItem draws image normally (top-down).
-        # Our scene is normal (top-down), but we position nodes by flipping their Y.
-        # So the "World Top" (max Y) is at Scene Y = 0 (or small).
-        # The "World Bottom" (min Y) is at Scene Y = large.
-        
-        # So UL corner of image (World x1, y1) should be at Scene (x1, max_y - y1).
-        # LR corner of image (World x2, y2) should be at Scene (x2, max_y - y2).
-        
-        # However, we need to know 'max_y' of the coordinate system to do the flip.
-        # The NodeItems use 'self.max_y' which is the max Y of the NETWORK nodes.
-        # The backdrop might extend beyond the network.
-        # This implies we should use a consistent reference.
-        # If we use the same 'max_y' as the nodes, then:
-        # Image Top (y1) -> Scene Y = self.max_y - y1
-        # Image Bottom (y2) -> Scene Y = self.max_y - y2
-        # Height in Scene = (self.max_y - y2) - (self.max_y - y1) = y1 - y2 = world_h
-        # This matches!
-        
         scene_x = ul_x
         scene_y = self.max_y - ul_y
         
         self.backdrop_item.setPos(scene_x, scene_y)
         
-        # Now scale. 
-        # We want the image width (img_w) to cover world_w.
-        # We want the image height (img_h) to cover world_h.
         self.backdrop_item.setScale(scale_x) 
-        # Note: We might need independent x/y scaling if aspect ratio differs
         self.backdrop_item.setTransform(self.backdrop_item.transform().scale(1, scale_y/scale_x))
         
     def clear_backdrop(self):
@@ -338,9 +249,7 @@ class NetworkScene(QGraphicsScene):
     
     def apply_map_options(self, options):
         """Apply map display options to the scene."""
-        print(f"DEBUG: NetworkScene.apply_map_options called. Options: {options}")
         if not options:
-            print("DEBUG: Options empty")
             return
         
         # Apply node options
@@ -350,28 +259,21 @@ class NetworkScene(QGraphicsScene):
         display_node_values = options.get('display_node_values', False)
         notation_font_size = options.get('notation_font_size', 8)
         
-        print(f"DEBUG: Applying node_size={node_size}, display_node_border={display_node_border}")
-        print(f"DEBUG: display_node_ids={display_node_ids}, display_node_values={display_node_values}")
-        print(f"DEBUG: Node items count: {len(self.node_items)}")
-        
         for node_id, item in self.node_items.items():
-            # Update node size (scale the radius)
-            # Base radius is 1.0 * item.scale (from __init__)
-            # Default node_size is 3
-            if hasattr(item, 'scale'):
-                base_radius = 1.0 * item.scale
-                scaled_radius = base_radius * (node_size / 3.0)
-                item.setRect(-scaled_radius, -scaled_radius, scaled_radius*2, scaled_radius*2)
-                item.radius = scaled_radius # Update radius property for label positioning
+            # Update node size (radius in pixels)
+            # Default radius is 3.0 (from items.py)
+            # node_size is an integer, let's use it directly as radius or scale factor
+            # Delphi: Size 0-10? 
+            # Let's map node_size (e.g. 5) to radius.
+            # Base radius = node_size
+            radius = float(node_size)
+            item.setRect(-radius, -radius, radius*2, radius*2)
+            item.radius = radius
             
             # Update border visibility
             if display_node_border:
                 pen = item.pen()
-                # Border width proportional to size
-                if hasattr(item, 'scale'):
-                    pen.setWidthF(0.05 * item.scale * (node_size / 3.0))
-                else:
-                    pen.setWidthF(0.05)
+                pen.setWidth(1) # Cosmetic pen width 1
                 item.setPen(pen)
             else:
                 item.setPen(QPen(Qt.NoPen))
@@ -379,108 +281,41 @@ class NetworkScene(QGraphicsScene):
             # Update ID label
             if hasattr(item, 'id_label'):
                 item.id_label.setVisible(display_node_ids)
-                if display_node_ids:
-                    print(f"DEBUG: Setting node {node_id} ID label visible. Pos: {item.id_label.pos()}")
-                
-                # Scale font size based on item scale
-                # Use a high-res base font and scale the item
-                base_font_size = 48
                 font = item.id_label.font()
-                font.setPixelSize(base_font_size) # Use pixel size for consistent base
+                font.setPointSize(notation_font_size)
                 item.id_label.setFont(font)
-                
-                if hasattr(item, 'scale'):
-                    # Target height = item.scale * (notation_font_size / 4.0)
-                    # Scale factor = target_height / base_font_size
-                    # notation_font_size 8 -> factor 2.0 relative to scale
-                    target_height = item.scale * (notation_font_size / 4.0)
-                    # Ensure minimum visibility? No, let it scale.
-                    scale_factor = target_height / base_font_size
-                    item.id_label.setScale(scale_factor)
-                else:
-                    item.id_label.setScale(1.0)
             
             # Update Value label
             if hasattr(item, 'value_label'):
                 item.value_label.setVisible(display_node_values)
                 # TODO: Set actual value text based on current time step
                 item.value_label.setText("0.00") 
-                
-                base_font_size = 48
                 font = item.value_label.font()
-                font.setPixelSize(base_font_size)
+                font.setPointSize(notation_font_size)
                 item.value_label.setFont(font)
-                
-                if hasattr(item, 'scale'):
-                    target_height = item.scale * (notation_font_size / 4.0)
-                    scale_factor = target_height / base_font_size
-                    item.value_label.setScale(scale_factor)
-                else:
-                    item.value_label.setScale(1.0)
                 
             # Update label positions
             if hasattr(item, 'update_label_positions'):
                 item.update_label_positions()
         
         # Apply link options
-        link_size = options.get('link_size', 2)
+        link_size = options.get('link_size', 1)
         display_link_border = options.get('display_link_border', False)
         display_link_ids = options.get('display_link_ids', False)
         display_link_values = options.get('display_link_values', False)
         
-        print(f"DEBUG: display_link_ids={display_link_ids}, display_link_values={display_link_values}")
-        
         for link_id, item in self.link_items.items():
-            # Update link width
+            # Update link width (pixels)
             pen = item.pen()
-            # Base width is 0.5 * item.scale (from __init__)
-            # Default link_size is 2
-            if hasattr(item, 'scale'):
-                # 0.5 * scale is default for size 2
-                # So factor is link_size / 2.0
-                width = (0.5 * item.scale) * (link_size / 2.0)
-                pen.setWidthF(width)
-            else:
-                pen.setWidthF(0.1 * link_size / 2.0)
+            pen.setWidth(link_size)
             item.setPen(pen)
             
             # Update ID label
             if hasattr(item, 'id_label'):
                 item.id_label.setVisible(display_link_ids)
-                if display_link_ids:
-                    print(f"DEBUG: Setting link {link_id} ID label visible")
-                
-                base_font_size = 48
                 font = item.id_label.font()
-                font.setPixelSize(base_font_size)
+                font.setPointSize(notation_font_size)
                 item.id_label.setFont(font)
-                
-                if hasattr(item, 'scale'):
-                    target_height = item.scale * (notation_font_size / 4.0)
-                    scale_factor = target_height / base_font_size
-                    item.id_label.setScale(scale_factor)
-                else:
-                    item.id_label.setScale(1.0)
-                
-            # Update Value label
-            if hasattr(item, 'value_label'):
-                item.value_label.setVisible(display_link_values)
-                # TODO: Set actual value text based on current time step
-                item.value_label.setText("0.00")
-                
-                base_font_size = 48
-                font = item.value_label.font()
-                font.setPixelSize(base_font_size)
-                item.value_label.setFont(font)
-                
-                if hasattr(item, 'scale'):
-                    target_height = item.scale * (notation_font_size / 4.0)
-                    scale_factor = target_height / base_font_size
-                    item.value_label.setScale(scale_factor)
-                else:
-                    item.value_label.setScale(1.0)
-                
-            # Update label positions
                 
             # Update Value label
             if hasattr(item, 'value_label'):
@@ -497,5 +332,3 @@ class NetworkScene(QGraphicsScene):
         
         # Update the scene
         self.update()
-
-

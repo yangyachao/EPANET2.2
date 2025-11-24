@@ -672,6 +672,13 @@ class MainWindow(QMainWindow):
         energy_action = QAction(self.create_icon_from_text("⚡"), "Energy", self)
         energy_action.triggered.connect(self.create_energy)
         self.std_toolbar.addAction(energy_action)
+        
+        self.std_toolbar.addSeparator()
+        
+        # Map Options
+        map_options_action = QAction(self.create_icon_from_text("⚙️"), "Map Options", self)
+        map_options_action.triggered.connect(self.show_map_options)
+        self.std_toolbar.addAction(map_options_action)
     
     def create_dock_widgets(self):
         """Create dock widgets."""

@@ -1,6 +1,6 @@
 """Table view for network data and results."""
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QComboBox, QLabel, QHBoxLayout, QHeaderView, QPushButton, QFileDialog
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QComboBox, QLabel, QHBoxLayout, QHeaderView, QPushButton, QFileDialog, QLineEdit
 from PySide6.QtCore import Qt, Signal
 from core.constants import NodeType, LinkType
 from core.units import get_unit_label
@@ -39,6 +39,14 @@ class TableView(QWidget):
         controls_layout.addWidget(self.export_btn)
         
         controls_layout.addStretch()
+        
+        # Filter
+        controls_layout.addWidget(QLabel("Filter ID:"))
+        self.filter_edit = QLineEdit()
+        self.filter_edit.setPlaceholderText("Enter ID...")
+        self.filter_edit.textChanged.connect(self.filter_rows)
+        controls_layout.addWidget(self.filter_edit)
+        
         layout.addLayout(controls_layout)
         
         # Table
@@ -266,3 +274,16 @@ class TableView(QWidget):
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Export Failed", str(e))
+
+    def filter_rows(self, text):
+        """Filter rows by ID."""
+        text = text.lower()
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0) # ID is always column 0
+            if not item:
+                continue
+                
+            if text in item.text().lower():
+                self.table.setRowHidden(row, False)
+            else:
+                self.table.setRowHidden(row, True)

@@ -3,10 +3,10 @@
 from PySide6.QtWidgets import (
     QMainWindow, QMdiArea, QStatusBar, QDockWidget, QTreeWidget, QTreeWidgetItem,
     QHeaderView, QMenu, QMessageBox, QInputDialog, QFileDialog,
-    QToolBar, QStyle
+    QToolBar, QStyle, QDialog
 )
-from PySide6.QtCore import Qt, QSize, QSettings, QPointF
-from PySide6.QtGui import QAction, QKeySequence, QColor, QIcon, QPixmap, QPainter, QFont, QPolygonF, QPainterPath, QPen
+from PySide6.QtCore import Qt, QSize, QSettings, QPointF, QRectF
+from PySide6.QtGui import QAction, QKeySequence, QColor, QIcon, QPixmap, QPainter, QFont, QPolygonF, QPainterPath, QPen, QImage
 import sys
 import os
 
@@ -1686,6 +1686,36 @@ class MainWindow(QMainWindow):
         state = self.settings.value("windowState")
         if state:
             self.restoreState(state)
+            
+        # Load Defaults
+        self.project.default_prefixes = {}
+        self.settings.beginGroup("Defaults/IDPrefixes")
+        for key in self.settings.childKeys():
+            self.project.default_prefixes[key] = self.settings.value(key)
+        self.settings.endGroup()
+        
+        # If empty, set defaults
+        if not self.project.default_prefixes:
+            self.project.default_prefixes = {
+                'Junction': 'J', 'Reservoir': 'R', 'Tank': 'T',
+                'Pipe': 'P', 'Pump': 'PU', 'Valve': 'V',
+                'Pattern': 'PAT', 'Curve': 'C'
+            }
+            
+        self.project.id_increment = int(self.settings.value("Defaults/IDIncrement", 1))
+        
+        self.project.default_properties = {}
+        self.settings.beginGroup("Defaults/Properties")
+        for key in self.settings.childKeys():
+            self.project.default_properties[key] = self.settings.value(key)
+        self.settings.endGroup()
+        
+        if not self.project.default_properties:
+            self.project.default_properties = {
+                'node_elevation': '0', 'tank_diameter': '15', 'tank_height': '3',
+                'pipe_length': '100', 'auto_length': 'Off',
+                'pipe_diameter': '300', 'pipe_roughness': '100'
+            }
     
     def save_settings(self):
         """Save window settings."""

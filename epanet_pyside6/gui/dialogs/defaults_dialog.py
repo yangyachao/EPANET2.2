@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QPushButton, QCheckBox, QHeaderView, QWidget,
     QLabel, QMessageBox
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSettings
 from PySide6.QtGui import QDoubleValidator, QIntValidator
 
 
@@ -293,5 +293,18 @@ class DefaultsDialog(QDialog):
         
     def save_to_config(self):
         """Save defaults to configuration file."""
-        # TODO: Implement config file saving
-        pass
+        settings = QSettings("US EPA", "EPANET 2.2")
+        
+        # Save ID Prefixes
+        settings.beginGroup("Defaults/IDPrefixes")
+        for key, value in self.project.default_prefixes.items():
+            settings.setValue(key, value)
+        settings.endGroup()
+        
+        settings.setValue("Defaults/IDIncrement", self.project.id_increment)
+        
+        # Save Properties
+        settings.beginGroup("Defaults/Properties")
+        for key, value in self.project.default_properties.items():
+            settings.setValue(key, value)
+        settings.endGroup()

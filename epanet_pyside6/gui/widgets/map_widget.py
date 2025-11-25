@@ -1,9 +1,10 @@
 """Map widget for displaying and editing the network."""
 
-from PySide6.QtWidgets import QGraphicsView, QMenu
+from PySide6.QtWidgets import QGraphicsView, QMenu, QGraphicsLineItem
 from PySide6.QtCore import Qt, QRectF, Signal
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QPainter, QPen, QColor
 from gui.graphics.scene import NetworkScene
+from gui.graphics.items import NodeItem
 from .legend_widget import LegendWidget
 
 class MapWidget(QGraphicsView):
@@ -28,12 +29,20 @@ class MapWidget(QGraphicsView):
         self.legend.hide()
         self.legend.options_requested.connect(self.options_requested.emit)
         
+        # Link drawing state
+        self.drawing_link_start_node = None
+        self.temp_link_line = None
+        
         # Initial fit
         self.fit_network()
         
+        self.interaction_mode = 'select'
+        
     def set_interaction_mode(self, mode: str):
-        """Set interaction mode (select, pan)."""
+        """Set interaction mode (select, pan, add_junction, etc.)."""
+        self.interaction_mode = mode
         print(f"DEBUG: MapWidget.set_interaction_mode called with {mode}")
+        
         if mode == 'pan':
             self.setDragMode(QGraphicsView.ScrollHandDrag)
             self.setCursor(Qt.OpenHandCursor)
@@ -42,11 +51,92 @@ class MapWidget(QGraphicsView):
             self.setCursor(Qt.ArrowCursor)
         else:
             self.setDragMode(QGraphicsView.NoDrag)
-            self.setCursor(Qt.ArrowCursor)
+            self.setCursor(Qt.CrossCursor)
             
     def mousePressEvent(self, event):
-        print(f"DEBUG: MapWidget.mousePressEvent. DragMode: {self.dragMode()}")
+        print(f"DEBUG: MapWidget.mousePressEvent. Mode: {self.interaction_mode}")
+        
+        if event.button() == Qt.LeftButton and self.interaction_mode.startswith('add_'):
+            pos = self.mapToScene(event.pos())
+            
+            # Check if adding link
+            if 'pipe' in self.interaction_mode or 'pump' in self.interaction_mode or 'valve' in self.interaction_mode:
+                # Find node at position
+                items = self.scene.items(pos)
+                node_item = None
+                for item in items:
+                    if isinstance(item, NodeItem):
+                        node_item = item
+                        break
+                
+                if node_item:
+                    if not self.drawing_link_start_node:
+                        # Start drawing link
+                        self.drawing_link_start_node = node_item
+                        self.temp_link_line = QGraphicsLineItem(
+                            node_item.pos().x(), node_item.pos().y(),
+                            pos.x(), pos.y()
+                        )
+                        self.temp_link_line.setPen(QPen(Qt.black, 2, Qt.DashLine))
+                        self.scene.addItem(self.temp_link_line)
+                    else:
+                        # Finish drawing link
+                        if node_item != self.drawing_link_start_node:
+                            link_type = 'Pipe'
+                            if 'pump' in self.interaction_mode: link_type = 'Pump'
+                            elif 'valve' in self.interaction_mode: link_type = 'Valve'
+                            
+                            link_id = self.project.add_link(link_type, self.drawing_link_start_node.node.id, node_item.node.id)
+                            self.scene.add_link(link_id)
+                            
+                            # Reset state
+                            self.scene.removeItem(self.temp_link_line)
+                            self.temp_link_line = None
+                            self.drawing_link_start_node = None
+                            
+                            # Refresh scene
+                            self.scene.update_scene_rect()
+                else:
+                    # Clicked on empty space while drawing? Cancel? Or ignore?
+                    # If start node is set, user might want to cancel by clicking empty space
+                    if self.drawing_link_start_node:
+                        self.scene.removeItem(self.temp_link_line)
+                        self.temp_link_line = None
+                        self.drawing_link_start_node = None
+                
+                return
+
+            # Adding Node
+            node_id = None
+            
+            # Convert to logical Y (EPANET coordinates)
+            # Visual Y = max_y - Logical Y  =>  Logical Y = max_y - Visual Y
+            logical_y = self.scene.max_y - pos.y()
+            
+            if self.interaction_mode == 'add_junction':
+                node_id = self.project.add_node('Junction', pos.x(), logical_y)
+            elif self.interaction_mode == 'add_reservoir':
+                node_id = self.project.add_node('Reservoir', pos.x(), logical_y)
+            elif self.interaction_mode == 'add_tank':
+                node_id = self.project.add_node('Tank', pos.x(), logical_y)
+            
+            if node_id:
+                self.scene.add_node(node_id)
+            
+            # Refresh scene
+            self.scene.update_scene_rect()
+            return
+
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self.temp_link_line:
+            pos = self.mapToScene(event.pos())
+            line = self.temp_link_line.line()
+            line.setP2(pos)
+            self.temp_link_line.setLine(line)
+            
+        super().mouseMoveEvent(event)
 
     def fit_network(self):
         """Fit the view to the network extent."""

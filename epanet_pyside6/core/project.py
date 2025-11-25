@@ -644,3 +644,125 @@ class EPANETProject:
             
         except Exception as e:
             raise Exception(f"Failed to import map: {e}")
+
+    def add_node(self, node_type: str, x: float, y: float) -> str:
+        """Add a new node to the project.
+        
+        Args:
+            node_type: 'Junction', 'Reservoir', or 'Tank'
+            x: X coordinate
+            y: Y coordinate
+            
+        Returns:
+            ID of the new node
+        """
+        # Generate ID
+        prefix = self.default_prefixes.get(node_type, 'N')
+        increment = self.id_increment
+        
+        while True:
+            node_id = f"{prefix}{increment}"
+            if node_id not in self.network.nodes:
+                break
+            increment += 1
+            
+        # Update increment for next time
+        self.id_increment = increment + 1
+        
+        # Get defaults
+        defaults = self.default_properties
+        
+        # Create node object
+        if node_type == 'Junction':
+            elev = float(defaults.get('node_elevation', 0))
+            node = Junction(node_id, x, y, elevation=elev)
+        elif node_type == 'Reservoir':
+            head = float(defaults.get('total_head', 0)) # Using total_head default if available, or 0
+            node = Reservoir(node_id, x, y, total_head=head)
+        elif node_type == 'Tank':
+            elev = float(defaults.get('node_elevation', 0))
+            diam = float(defaults.get('tank_diameter', 50))
+            height = float(defaults.get('tank_height', 10))
+            level = float(defaults.get('init_level', 0))
+            min_level = float(defaults.get('min_level', 0))
+            max_level = float(defaults.get('max_level', 10))
+            
+            node = Tank(node_id, x, y, elevation=elev, diameter=diam, 
+                       init_level=level, min_level=min_level, max_level=max_level)
+        else:
+            raise ValueError(f"Unknown node type: {node_type}")
+            
+        # Add to network
+        self.network.add_node(node)
+        self.modified = True
+        
+        # Sync to WNTR (re-sync whole network for now, or optimize later)
+        # For immediate visual feedback, we just need it in self.network
+        # But for analysis, we need it in WNTR. 
+        # Let's add directly to WNTR to avoid full re-sync overhead if possible, 
+        # or just rely on _sync_network_to_wntr() being called before save/run.
+        # Actually, _sync_network_to_wntr is called before save/run.
+        # But we might want to keep them in sync.
+        
+        return node_id
+
+    def add_link(self, link_type: str, from_node: str, to_node: str) -> str:
+        """Add a new link to the project.
+        
+        Args:
+            link_type: 'Pipe', 'Pump', or 'Valve'
+            from_node: Start node ID
+            to_node: End node ID
+            
+        Returns:
+            ID of the new link
+        """
+        # Generate ID
+        prefix = self.default_prefixes.get(link_type, 'L')
+        increment = self.id_increment
+        
+        while True:
+            link_id = f"{prefix}{increment}"
+            if link_id not in self.network.links:
+                break
+            increment += 1
+            
+        # Update increment for next time
+        self.id_increment = increment + 1
+        
+        # Get defaults
+        defaults = self.default_properties
+        
+        # Create link object
+        if link_type == 'Pipe':
+            length = float(defaults.get('pipe_length', 100))
+            diam = float(defaults.get('pipe_diameter', 300))
+            rough = float(defaults.get('pipe_roughness', 100))
+            
+            # Auto Length check (requires calculating distance)
+            if defaults.get('auto_length') == 'On':
+                # Calculate distance between nodes
+                n1 = self.network.nodes.get(from_node)
+                n2 = self.network.nodes.get(to_node)
+                if n1 and n2:
+                    import math
+                    dist = math.sqrt((n2.x - n1.x)**2 + (n2.y - n1.y)**2)
+                    length = dist
+            
+            link = Pipe(link_id, from_node, to_node, length=length, diameter=diam, roughness=rough)
+            
+        elif link_type == 'Pump':
+            link = Pump(link_id, from_node, to_node)
+            
+        elif link_type == 'Valve':
+            diam = float(defaults.get('pipe_diameter', 300)) # Use pipe diameter default for valve?
+            link = Valve(link_id, LinkType.PRV, from_node, to_node, diameter=diam)
+            
+        else:
+            raise ValueError(f"Unknown link type: {link_type}")
+            
+        # Add to network
+        self.network.add_link(link)
+        self.modified = True
+        
+        return link_id

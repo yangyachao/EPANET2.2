@@ -649,6 +649,47 @@ class MainWindow(QMainWindow):
         
         self.std_toolbar.addSeparator()
         
+        # Object Creation
+        self.add_junction_action = QAction(self.create_icon_from_text("○"), "Add Junction", self)
+        self.add_junction_action.setCheckable(True)
+        self.add_junction_action.setToolTip("Add Junction")
+        self.add_junction_action.triggered.connect(lambda: self.set_interaction_mode('add_junction'))
+        self.std_toolbar.addAction(self.add_junction_action)
+        
+        self.add_reservoir_action = QAction(self.create_icon_from_text("□"), "Add Reservoir", self)
+        self.add_reservoir_action.setCheckable(True)
+        self.add_reservoir_action.setToolTip("Add Reservoir")
+        self.add_reservoir_action.triggered.connect(lambda: self.set_interaction_mode('add_reservoir'))
+        self.std_toolbar.addAction(self.add_reservoir_action)
+        
+        self.add_tank_action = QAction(self.create_icon_from_text("⌸"), "Add Tank", self)
+        self.add_tank_action.setCheckable(True)
+        self.add_tank_action.setToolTip("Add Tank")
+        self.add_tank_action.triggered.connect(lambda: self.set_interaction_mode('add_tank'))
+        self.std_toolbar.addAction(self.add_tank_action)
+        
+        self.std_toolbar.addSeparator()
+        
+        self.add_pipe_action = QAction(self.create_icon_from_text("—"), "Add Pipe", self)
+        self.add_pipe_action.setCheckable(True)
+        self.add_pipe_action.setToolTip("Add Pipe")
+        self.add_pipe_action.triggered.connect(lambda: self.set_interaction_mode('add_pipe'))
+        self.std_toolbar.addAction(self.add_pipe_action)
+        
+        self.add_pump_action = QAction(self.create_icon_from_text("⏀"), "Add Pump", self)
+        self.add_pump_action.setCheckable(True)
+        self.add_pump_action.setToolTip("Add Pump")
+        self.add_pump_action.triggered.connect(lambda: self.set_interaction_mode('add_pump'))
+        self.std_toolbar.addAction(self.add_pump_action)
+        
+        self.add_valve_action = QAction(self.create_icon_from_text("⧖"), "Add Valve", self)
+        self.add_valve_action.setCheckable(True)
+        self.add_valve_action.setToolTip("Add Valve")
+        self.add_valve_action.triggered.connect(lambda: self.set_interaction_mode('add_valve'))
+        self.std_toolbar.addAction(self.add_valve_action)
+        
+        self.std_toolbar.addSeparator()
+        
         # Run
         run_action = QAction(self.create_icon_from_text("▶️"), "Run", self)
         run_action.triggered.connect(self.run_simulation)
@@ -1438,6 +1479,15 @@ class MainWindow(QMainWindow):
         # Update UI state
         self.select_action.setChecked(mode == 'select')
         self.pan_action.setChecked(mode == 'pan')
+        
+        # Object creation actions
+        if hasattr(self, 'add_junction_action'):
+            self.add_junction_action.setChecked(mode == 'add_junction')
+            self.add_reservoir_action.setChecked(mode == 'add_reservoir')
+            self.add_tank_action.setChecked(mode == 'add_tank')
+            self.add_pipe_action.setChecked(mode == 'add_pipe')
+            self.add_pump_action.setChecked(mode == 'add_pump')
+            self.add_valve_action.setChecked(mode == 'add_valve')
 
     
     # View operations

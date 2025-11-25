@@ -17,6 +17,7 @@ class NetworkScene(QGraphicsScene):
         self.node_items = {}
         self.link_items = {}
         self.backdrop_item = None
+        self.max_y = 0
         
         # Set scene background
         self.setBackgroundBrush(QBrush(Qt.white))
@@ -131,6 +132,68 @@ class NetworkScene(QGraphicsScene):
             
         for item in self.node_items.values():
             item.setZValue(1)
+
+    def add_node(self, node_id):
+        """Add a specific node to the scene."""
+        if node_id not in self.project.network.nodes:
+            return
+            
+        node = self.project.network.nodes[node_id]
+        
+        # Calculate Y-axis flip
+        if node.y > self.max_y:
+            self.max_y = node.y
+            # If max_y changed, we must update positions of ALL existing nodes
+            for existing_item in self.node_items.values():
+                existing_item.max_y = self.max_y
+                existing_item.setPos(existing_item.node.x, self.max_y - existing_item.node.y)
+                # Links connected to these nodes will update automatically via itemChange
+            
+            # Also update backdrop if present
+            if self.backdrop_item:
+                # Backdrop position depends on max_y
+                # We need to re-set backdrop? Or just move it?
+                # Backdrop is positioned at (ul_x, max_y - ul_y)
+                # Let's just reload backdrop if possible, or adjust pos
+                # Simpler to just leave it for now or implement full update
+                pass
+
+        if node.node_type == NodeType.JUNCTION:
+            item = JunctionItem(node, max_y=self.max_y)
+        elif node.node_type == NodeType.RESERVOIR:
+            item = ReservoirItem(node, max_y=self.max_y)
+        elif node.node_type == NodeType.TANK:
+            item = TankItem(node, max_y=self.max_y)
+        else:
+            return
+            
+        self.addItem(item)
+        self.node_items[node.id] = item
+        item.setZValue(1)
+        
+    def add_link(self, link_id):
+        """Add a specific link to the scene."""
+        if link_id not in self.project.network.links:
+            return
+            
+        link = self.project.network.links[link_id]
+        
+        if link.from_node not in self.node_items or link.to_node not in self.node_items:
+            return
+            
+        from_pos = self.node_items[link.from_node].pos()
+        to_pos = self.node_items[link.to_node].pos()
+        
+        if link.link_type == LinkType.PIPE:
+            item = PipeItem(link, from_pos, to_pos)
+        elif link.link_type == LinkType.PUMP:
+            item = PumpItem(link, from_pos, to_pos)
+        else: # Valve
+            item = ValveItem(link, from_pos, to_pos)
+            
+        self.addItem(item)
+        self.link_items[link.id] = item
+        item.setZValue(0)
 
     def update_connected_links(self, node_id):
         """Update links connected to a moving node."""

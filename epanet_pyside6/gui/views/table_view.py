@@ -47,6 +47,7 @@ class TableView(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
+        self.table.setSortingEnabled(True) # Enable sorting
         self.table.itemSelectionChanged.connect(self.on_selection_changed)
         layout.addWidget(self.table)
         
@@ -97,6 +98,9 @@ class TableView(QWidget):
         
     def refresh_data(self):
         """Refresh table data."""
+        # Disable sorting while updating
+        self.table.setSortingEnabled(False)
+        
         self.table.setRowCount(0)
         self.table.setColumnCount(0)
         
@@ -227,6 +231,9 @@ class TableView(QWidget):
                 item = QTableWidgetItem(str(value))
                 item.setFlags(item.flags() ^ Qt.ItemIsEditable) # Read-only for now
                 self.table.setItem(row, col, item)
+                
+        # Re-enable sorting
+        self.table.setSortingEnabled(True)
 
     def export_to_csv(self):
         """Export current table data to CSV."""

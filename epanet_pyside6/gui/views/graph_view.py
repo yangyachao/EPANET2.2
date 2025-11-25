@@ -14,6 +14,13 @@ class GraphView(QWidget):
         self.object_type = None # 'Node' or 'Link'
         self.param_type = None
         
+        self.graph_options = {
+            'show_grid': True,
+            'show_legend': True,
+            'white_background': True,
+            'line_width': 2
+        }
+        
         self.setup_ui()
         
     def setup_ui(self):
@@ -35,6 +42,10 @@ class GraphView(QWidget):
         self.export_img_btn = QPushButton("Export Image")
         self.export_img_btn.clicked.connect(self.export_image)
         controls_layout.addWidget(self.export_img_btn)
+        
+        self.options_btn = QPushButton("Options...")
+        self.options_btn.clicked.connect(self.show_options)
+        controls_layout.addWidget(self.options_btn)
         
         controls_layout.addStretch()
         layout.addLayout(controls_layout)
@@ -75,7 +86,14 @@ class GraphView(QWidget):
     def refresh_plot(self):
         """Refresh the plot data."""
         self.plot_widget.clear()
-        self.plot_widget.addLegend()
+        
+        # Apply options
+        opts = self.graph_options
+        self.plot_widget.setBackground('w' if opts['white_background'] else 'k')
+        self.plot_widget.showGrid(x=opts['show_grid'], y=opts['show_grid'])
+        
+        if opts['show_legend']:
+            self.plot_widget.addLegend()
         
         if not self.project.has_results():
             self.plot_widget.setTitle("No simulation results available")
@@ -91,17 +109,30 @@ class GraphView(QWidget):
         try:
             # Color cycle for multiple lines
             colors = ['b', 'r', 'g', 'c', 'm', 'y', 'k']
+            if not opts['white_background']:
+                colors = ['c', 'm', 'y', 'g', 'r', 'b', 'w'] # Brighter colors for dark bg
+            
+            width = opts['line_width']
             
             for i, obj_id in enumerate(self.object_ids):
                 times, values = self.project.get_time_series(self.object_type, obj_id, param)
                 color = colors[i % len(colors)]
-                self.plot_widget.plot(times, values, pen=pg.mkPen(color=color, width=2), name=f"{obj_id}")
+                self.plot_widget.plot(times, values, pen=pg.mkPen(color=color, width=width), name=f"{obj_id}")
             
             self.plot_widget.setTitle(f"{self.object_type} {param.name}")
             self.plot_widget.setLabel('left', param.name)
             
         except Exception as e:
             self.plot_widget.setTitle(f"Error: {str(e)}")
+
+    def show_options(self):
+        """Show graph options dialog."""
+        from gui.dialogs.graph_options_dialog import GraphOptionsDialog
+        
+        dialog = GraphOptionsDialog(self, self.graph_options)
+        if dialog.exec():
+            self.graph_options = dialog.get_options()
+            self.refresh_plot()
 
     def export_data(self):
         """Export graph data to CSV."""

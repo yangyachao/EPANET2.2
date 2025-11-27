@@ -136,6 +136,13 @@ class NodeItem(QGraphicsEllipseItem):
                 self.setPen(self.normal_pen)
                 self.setGraphicsEffect(None)
 
+    def set_color(self, color):
+        """Set the node color."""
+        if color:
+            self.setBrush(QBrush(color))
+        else:
+            self.setBrush(QBrush(self.normal_color))
+
 class JunctionItem(NodeItem):
     """Graphics item for Junction."""
     

@@ -54,20 +54,13 @@ class MapWidget(QGraphicsView):
             self.setCursor(Qt.CrossCursor)
             
     def mousePressEvent(self, event):
-        print(f"DEBUG: MapWidget.mousePressEvent. Mode: {self.interaction_mode}")
-        
         if event.button() == Qt.LeftButton and self.interaction_mode.startswith('add_'):
             pos = self.mapToScene(event.pos())
             
             # Check if adding link
             if 'pipe' in self.interaction_mode or 'pump' in self.interaction_mode or 'valve' in self.interaction_mode:
-                # Find node at position
-                items = self.scene.items(pos)
-                node_item = None
-                for item in items:
-                    if isinstance(item, NodeItem):
-                        node_item = item
-                        break
+                # Find nearest node within snap distance
+                node_item = self.find_nearest_node(pos)
                 
                 if node_item:
                     if not self.drawing_link_start_node:
@@ -77,7 +70,10 @@ class MapWidget(QGraphicsView):
                             node_item.pos().x(), node_item.pos().y(),
                             pos.x(), pos.y()
                         )
-                        self.temp_link_line.setPen(QPen(Qt.black, 2, Qt.DashLine))
+                        # High visibility pen for drawing
+                        pen = QPen(QColor(0, 120, 255), 2, Qt.SolidLine)
+                        pen.setCosmetic(True)
+                        self.temp_link_line.setPen(pen)
                         self.scene.addItem(self.temp_link_line)
                     else:
                         # Finish drawing link
@@ -93,6 +89,11 @@ class MapWidget(QGraphicsView):
                             self.scene.removeItem(self.temp_link_line)
                             self.temp_link_line = None
                             self.drawing_link_start_node = None
+                            
+                            # Clear highlight
+                            if hasattr(self, 'last_highlighted_node') and self.last_highlighted_node:
+                                self.last_highlighted_node.set_highlight(False)
+                                self.last_highlighted_node = None
                             
                             # Refresh scene
                             self.scene.update_scene_rect()
@@ -186,13 +187,64 @@ class MapWidget(QGraphicsView):
             self.scene.update()
 
     def mouseMoveEvent(self, event):
-        if self.temp_link_line:
-            pos = self.mapToScene(event.pos())
-            line = self.temp_link_line.line()
-            line.setP2(pos)
-            self.temp_link_line.setLine(line)
+        pos = self.mapToScene(event.pos())
+        
+        # Snapping logic for link drawing
+        if 'pipe' in self.interaction_mode or 'pump' in self.interaction_mode or 'valve' in self.interaction_mode:
+            nearest_node = self.find_nearest_node(pos)
+            
+            # Update cursor and highlight
+            if nearest_node:
+                self.setCursor(Qt.CrossCursor)
+                if hasattr(self, 'last_highlighted_node') and self.last_highlighted_node != nearest_node:
+                    if self.last_highlighted_node:
+                        self.last_highlighted_node.set_highlight(False)
+                
+                nearest_node.set_highlight(True)
+                self.last_highlighted_node = nearest_node
+            else:
+                self.setCursor(Qt.ArrowCursor)
+                if hasattr(self, 'last_highlighted_node') and self.last_highlighted_node:
+                    self.last_highlighted_node.set_highlight(False)
+                    self.last_highlighted_node = None
+                
+            if self.temp_link_line:
+                line = self.temp_link_line.line()
+                
+                if nearest_node:
+                    # Snap to node center
+                    line.setP2(nearest_node.pos())
+                else:
+                    # Follow mouse
+                    line.setP2(pos)
+                    
+                self.temp_link_line.setLine(line)
             
         super().mouseMoveEvent(event)
+
+    def find_nearest_node(self, pos, threshold=15):
+        """Find the nearest node within threshold distance."""
+        nearest_item = None
+        min_dist = float('inf')
+        
+        # Check all node items
+        # Optimization: Use scene.items(rect) for spatial query if performance is an issue
+        # For now, iterating is fine for small/medium networks
+        # Better: query scene for items near pos
+        
+        # Create a small rect around pos
+        rect = QRectF(pos.x() - threshold, pos.y() - threshold, threshold*2, threshold*2)
+        items = self.scene.items(rect)
+        
+        for item in items:
+            if isinstance(item, NodeItem):
+                # Calculate distance
+                dist = (item.pos() - pos).manhattanLength() # Approximation is fine
+                if dist < min_dist:
+                    min_dist = dist
+                    nearest_item = item
+                    
+        return nearest_item
 
     def fit_network(self):
         """Fit the view to the network extent."""

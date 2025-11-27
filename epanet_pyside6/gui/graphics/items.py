@@ -111,12 +111,30 @@ class NodeItem(QGraphicsEllipseItem):
                 self.setGraphicsEffect(None)
         return super().itemChange(change, value)
         
-    def set_color(self, color):
-        """Set the node color."""
-        if color:
-            self.setBrush(QBrush(color))
+    def set_highlight(self, active):
+        """Set snap highlight state."""
+        if active:
+            # Cyan glow for snap
+            self.setBrush(QBrush(QColor(0, 255, 255)))
+            # Thicker cyan border
+            pen = QPen(QColor(0, 255, 255), 2)
+            pen.setCosmetic(True)
+            self.setPen(pen)
+            
+            # Add glow effect
+            effect = QGraphicsDropShadowEffect()
+            effect.setBlurRadius(10)
+            effect.setColor(QColor(0, 255, 255))
+            effect.setOffset(0, 0)
+            self.setGraphicsEffect(effect)
         else:
-            self.setBrush(QBrush(self.normal_color))
+            # Restore state based on selection
+            if self.isSelected():
+                self.itemChange(QGraphicsItem.ItemSelectedChange, True)
+            else:
+                self.setBrush(QBrush(self.normal_color))
+                self.setPen(self.normal_pen)
+                self.setGraphicsEffect(None)
 
 class JunctionItem(NodeItem):
     """Graphics item for Junction."""

@@ -10,19 +10,19 @@ class NodeItem(QGraphicsEllipseItem):
     Uses ItemIgnoresTransformations to maintain constant screen size.
     """
     
-    def __init__(self, node, radius=3.0, max_y=0):
+    def __init__(self, node, radius=3.0):
         # Radius is now in pixels, not world coordinates
         super().__init__(-radius, -radius, radius*2, radius*2)
         self.node = node
         self.radius = radius
-        self.max_y = max_y
         self.normal_color = Qt.white
         
         # Cosmetic pen (width=0) - always 1 pixel regardless of zoom
         self.normal_pen = QPen(Qt.black, 0)
         
         # Flip Y coordinate: EPANET Y goes up, Qt Y goes down
-        self.setPos(node.x, max_y - node.y)
+        # Use simple negation for stability
+        self.setPos(node.x, -node.y)
         
         # Critical: Ignore transformations (zoom) to keep fixed size
         self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
@@ -92,7 +92,7 @@ class NodeItem(QGraphicsEllipseItem):
         if change == QGraphicsItem.ItemPositionChange:
             # Update node model coordinates (flip Y back to EPANET coordinate system)
             self.node.x = value.x()
-            self.node.y = self.max_y - value.y()
+            self.node.y = -value.y()
             # Notify connected links to update
             if hasattr(self.scene(), "update_connected_links"):
                 self.scene().update_connected_links(self.node.id)
@@ -121,24 +121,24 @@ class NodeItem(QGraphicsEllipseItem):
 class JunctionItem(NodeItem):
     """Graphics item for Junction."""
     
-    def __init__(self, node, max_y=0):
-        super().__init__(node, radius=3.0, max_y=max_y)
+    def __init__(self, node):
+        super().__init__(node, radius=3.0)
         self.normal_color = QColor(0, 120, 255)  # Brighter blue
         self.setBrush(QBrush(self.normal_color))
 
 class ReservoirItem(NodeItem):
     """Graphics item for Reservoir."""
     
-    def __init__(self, node, max_y=0):
-        super().__init__(node, radius=5.0, max_y=max_y)
+    def __init__(self, node):
+        super().__init__(node, radius=5.0)
         self.normal_color = QColor(0, 200, 0)  # Green
         self.setBrush(QBrush(self.normal_color))
 
 class TankItem(NodeItem):
     """Graphics item for Tank."""
     
-    def __init__(self, node, max_y=0):
-        super().__init__(node, radius=4.0, max_y=max_y)
+    def __init__(self, node):
+        super().__init__(node, radius=4.0)
         self.normal_color = QColor(255, 200, 0)  # Brighter yellow
         self.setBrush(QBrush(self.normal_color))
 
@@ -295,13 +295,12 @@ class ValveItem(LinkItem):
 class LabelItem(QGraphicsSimpleTextItem):
     """Graphics item for Map Labels."""
     
-    def __init__(self, label, max_y=0):
+    def __init__(self, label):
         super().__init__(label.text)
         self.label = label
-        self.max_y = max_y
         
         # Flip Y coordinate
-        self.setPos(label.x, max_y - label.y)
+        self.setPos(label.x, -label.y)
         
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         self.setFlag(QGraphicsItem.ItemIsMovable)
@@ -315,7 +314,7 @@ class LabelItem(QGraphicsSimpleTextItem):
         if change == QGraphicsItem.ItemPositionChange:
             # Update label model coordinates
             self.label.x = value.x()
-            self.label.y = self.max_y - value.y()
+            self.label.y = -value.y()
         elif change == QGraphicsItem.ItemSelectedChange:
             if value:
                 self.setBrush(QBrush(Qt.red))

@@ -33,8 +33,8 @@ class MapWidget(QGraphicsView):
         self.drawing_link_start_node = None
         self.temp_link_line = None
         
-        # Initial fit
-        self.fit_network()
+        # Initial fit state
+        self._first_resize = True
         
         self.interaction_mode = 'select'
         
@@ -108,10 +108,9 @@ class MapWidget(QGraphicsView):
 
             # Adding Node
             node_id = None
-            
-            # Convert to logical Y (EPANET coordinates)
-            # Visual Y = max_y - Logical Y  =>  Logical Y = max_y - Visual Y
-            logical_y = self.scene.max_y - pos.y()
+            # Convert visual Y (Qt) to logical Y (EPANET)
+            # Qt Y = -EPANET Y  =>  EPANET Y = -Qt Y
+            logical_y = -pos.y()
             
             if self.interaction_mode == 'add_junction':
                 node_id = self.project.add_node('Junction', pos.x(), logical_y)
@@ -129,7 +128,7 @@ class MapWidget(QGraphicsView):
                 text, ok = QInputDialog.getText(self, "Add Label", "Label Text:")
                 if ok and text:
                     # Convert to logical Y
-                    logical_y = self.scene.max_y - pos.y()
+                    logical_y = -pos.y()
                     label_id = self.project.add_label(text, pos.x(), logical_y)
                     self.scene.add_label(label_id)
             
@@ -199,6 +198,8 @@ class MapWidget(QGraphicsView):
         """Fit the view to the network extent."""
         # Calculate bounds from node positions
         if not self.scene.node_items:
+            # Fallback to scene rect (which is now initialized to 10000x10000)
+            self.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
             return
             
         min_x = float('inf')
@@ -249,6 +250,10 @@ class MapWidget(QGraphicsView):
         super().resizeEvent(event)
         # Position legend in top-left corner
         self.legend.move(10, 10)
+        
+        if self._first_resize:
+            self._first_resize = False
+            self.fit_network()
     
     def contextMenuEvent(self, event):
         """Show context menu on right-click."""

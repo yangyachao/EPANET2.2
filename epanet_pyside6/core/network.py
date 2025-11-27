@@ -26,11 +26,12 @@ class Network:
         self.calibration_data: Dict[str, str] = {}
         
         # Map dimensions
+        # Initialize with a default 10000x10000 canvas to prevent jumps
         self.map_bounds: Dict[str, float] = {
-            'min_x': float('inf'),
-            'min_y': float('inf'),
-            'max_x': float('-inf'),
-            'max_y': float('-inf')
+            'min_x': 0.0,
+            'min_y': 0.0,
+            'max_x': 10000.0,
+            'max_y': 10000.0
         }
         self.map_units: str = "None" # Feet, Meters, Degrees, None
     
@@ -46,10 +47,10 @@ class Network:
         self.calibration_data.clear()
         self.map_units = "None"
         self.map_bounds = {
-            'min_x': float('inf'),
-            'min_y': float('inf'),
-            'max_x': float('-inf'),
-            'max_y': float('-inf')
+            'min_x': 0.0,
+            'min_y': 0.0,
+            'max_x': 10000.0,
+            'max_y': 10000.0
         }
     
     # Node operations

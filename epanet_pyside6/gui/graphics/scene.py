@@ -34,30 +34,26 @@ class NetworkScene(QGraphicsScene):
         max_y = bounds.get('max_y', 10000.0)
         
         # Handle empty network or uninitialized bounds
-        if min_x == float('inf'):
-            min_x = 0.0
-        if min_y == float('inf'):
-            min_y = 0.0
-        if max_x == float('-inf'):
-            max_x = 10000.0
-        if max_y == float('-inf'):
-            max_y = 10000.0
+        if min_x == float('inf'): min_x = 0.0
+        if min_y == float('inf'): min_y = 0.0
+        if max_x == float('-inf'): max_x = 10000.0
+        if max_y == float('-inf'): max_y = 10000.0
             
         # Ensure valid dimensions
-        if max_x <= min_x:
-            max_x = min_x + 10000.0
-        if max_y <= min_y:
-            max_y = min_y + 10000.0
+        if max_x <= min_x: max_x = min_x + 10000.0
+        if max_y <= min_y: max_y = min_y + 10000.0
+        
+        # Convert to Qt coordinates (Y flipped)
+        # EPANET: min_y (bottom) to max_y (top)
+        # Qt: -max_y (top) to -min_y (bottom)
+        
+        qt_min_y = -max_y
+        qt_max_y = -min_y
         
         width = max_x - min_x
-        height = max_y - min_y
+        height = qt_max_y - qt_min_y
         
-        # We use self.max_y to flip coordinates.
-        if hasattr(self, 'max_y') and self.max_y != max_y:
-            self.max_y = max_y
-            self.load_network() # Reload to update positions
-        
-        self.setSceneRect(min_x, 0, width, height)
+        self.setSceneRect(min_x, qt_min_y, width, height)
 
     def on_selection_changed(self):
         """Handle internal selection changes."""
@@ -75,6 +71,8 @@ class NetworkScene(QGraphicsScene):
                 self.selectionChanged.emit(item.node)
             elif hasattr(item, 'link'):
                 self.selectionChanged.emit(item.link)
+            elif hasattr(item, 'label'):
+                self.selectionChanged.emit(item.label)
         else:
             self.selectionChanged.emit(None)
 
@@ -86,28 +84,22 @@ class NetworkScene(QGraphicsScene):
         
         network = self.project.network
         
-        if not network.nodes:
-            return
+        network = self.project.network
         
-        # Calculate Y-axis flip (EPANET Y goes up, Qt Y goes down)
+        # Add Nodes (with Y-axis flipping handled in Item)
         if network.nodes:
-            self.max_y = max(node.y for node in network.nodes.values())
-        else:
-            self.max_y = 0
-        
-        # Add Nodes (with Y-axis flipping)
-        for node in network.nodes.values():
-            if node.node_type == NodeType.JUNCTION:
-                item = JunctionItem(node, max_y=self.max_y)
-            elif node.node_type == NodeType.RESERVOIR:
-                item = ReservoirItem(node, max_y=self.max_y)
-            elif node.node_type == NodeType.TANK:
-                item = TankItem(node, max_y=self.max_y)
-            else:
-                continue
-                
-            self.addItem(item)
-            self.node_items[node.id] = item
+            for node in network.nodes.values():
+                if node.node_type == NodeType.JUNCTION:
+                    item = JunctionItem(node)
+                elif node.node_type == NodeType.RESERVOIR:
+                    item = ReservoirItem(node)
+                elif node.node_type == NodeType.TANK:
+                    item = TankItem(node)
+                else:
+                    continue
+                    
+                self.addItem(item)
+                self.node_items[node.id] = item
             
         # Add Links
         for link in network.links.values():
@@ -136,10 +128,10 @@ class NetworkScene(QGraphicsScene):
         # Add Labels
         if hasattr(network, 'labels'):
             for label in network.labels.values():
-                item = LabelItem(label, max_y=self.max_y)
+                item = LabelItem(label)
                 self.addItem(item)
-                # Store label items? Maybe in a dict if we want to update them
-                # self.label_items[label.id] = item
+                
+        self.update_scene_rect()
 
     def add_node(self, node_id):
         """Add a specific node to the scene."""
@@ -148,30 +140,12 @@ class NetworkScene(QGraphicsScene):
             
         node = self.project.network.nodes[node_id]
         
-        # Calculate Y-axis flip
-        if node.y > self.max_y:
-            self.max_y = node.y
-            # If max_y changed, we must update positions of ALL existing nodes
-            for existing_item in self.node_items.values():
-                existing_item.max_y = self.max_y
-                existing_item.setPos(existing_item.node.x, self.max_y - existing_item.node.y)
-                # Links connected to these nodes will update automatically via itemChange
-            
-            # Also update backdrop if present
-            if self.backdrop_item:
-                # Backdrop position depends on max_y
-                # We need to re-set backdrop? Or just move it?
-                # Backdrop is positioned at (ul_x, max_y - ul_y)
-                # Let's just reload backdrop if possible, or adjust pos
-                # Simpler to just leave it for now or implement full update
-                pass
-
         if node.node_type == NodeType.JUNCTION:
-            item = JunctionItem(node, max_y=self.max_y)
+            item = JunctionItem(node)
         elif node.node_type == NodeType.RESERVOIR:
-            item = ReservoirItem(node, max_y=self.max_y)
+            item = ReservoirItem(node)
         elif node.node_type == NodeType.TANK:
-            item = TankItem(node, max_y=self.max_y)
+            item = TankItem(node)
         else:
             return
             
@@ -209,7 +183,7 @@ class NetworkScene(QGraphicsScene):
             return
             
         label = self.project.network.labels[label_id]
-        item = LabelItem(label, max_y=self.max_y)
+        item = LabelItem(label)
         self.addItem(item)
 
     def update_connected_links(self, node_id):

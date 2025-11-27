@@ -766,3 +766,61 @@ class EPANETProject:
         self.modified = True
         
         return link_id
+
+    def add_label(self, text: str, x: float, y: float) -> str:
+        """Add a new label to the project.
+        
+        Args:
+            text: Label text
+            x: X coordinate
+            y: Y coordinate
+            
+        Returns:
+            ID of the new label
+        """
+        # Generate ID
+        # Labels don't strictly need IDs in EPANET, but we use them for management
+        prefix = "Text"
+        increment = 1
+        
+        # Simple ID generation
+        while True:
+            label_id = f"{prefix}{increment}"
+            if not hasattr(self.network, 'labels') or label_id not in self.network.labels:
+                break
+            increment += 1
+            
+        from models import Label
+        label = Label(label_id, x, y, text)
+        
+        self.network.add_label(label)
+        self.modified = True
+        
+        return label_id
+
+    def delete_node(self, node_id: str):
+        """Delete a node from the project."""
+        if node_id not in self.network.nodes:
+            return
+            
+        # Remove connected links first? Or let network.remove_node handle it (it raises error)
+        # We should probably handle it gracefully or let the UI handle the error
+        # For now, let's just try to remove and propagate error
+        self.network.remove_node(node_id)
+        self.modified = True
+        
+    def delete_link(self, link_id: str):
+        """Delete a link from the project."""
+        if link_id not in self.network.links:
+            return
+            
+        self.network.remove_link(link_id)
+        self.modified = True
+        
+    def delete_label(self, label_id: str):
+        """Delete a label from the project."""
+        if not hasattr(self.network, 'labels') or label_id not in self.network.labels:
+            return
+            
+        self.network.remove_label(label_id)
+        self.modified = True

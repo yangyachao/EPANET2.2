@@ -3,7 +3,7 @@
 from PySide6.QtWidgets import QGraphicsScene
 from PySide6.QtCore import Qt, Signal, QRectF
 from PySide6.QtGui import QPen, QColor, QBrush, QPixmap, QFont
-from .items import JunctionItem, ReservoirItem, TankItem, PipeItem, PumpItem, ValveItem
+from .items import JunctionItem, ReservoirItem, TankItem, PipeItem, PumpItem, ValveItem, LabelItem
 from core.constants import NodeType, LinkType
 
 class NetworkScene(QGraphicsScene):
@@ -132,6 +132,14 @@ class NetworkScene(QGraphicsScene):
             
         for item in self.node_items.values():
             item.setZValue(1)
+            
+        # Add Labels
+        if hasattr(network, 'labels'):
+            for label in network.labels.values():
+                item = LabelItem(label, max_y=self.max_y)
+                self.addItem(item)
+                # Store label items? Maybe in a dict if we want to update them
+                # self.label_items[label.id] = item
 
     def add_node(self, node_id):
         """Add a specific node to the scene."""
@@ -194,6 +202,15 @@ class NetworkScene(QGraphicsScene):
         self.addItem(item)
         self.link_items[link.id] = item
         item.setZValue(0)
+
+    def add_label(self, label_id):
+        """Add a specific label to the scene."""
+        if not hasattr(self.project.network, 'labels') or label_id not in self.project.network.labels:
+            return
+            
+        label = self.project.network.labels[label_id]
+        item = LabelItem(label, max_y=self.max_y)
+        self.addItem(item)
 
     def update_connected_links(self, node_id):
         """Update links connected to a moving node."""

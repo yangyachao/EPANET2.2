@@ -291,3 +291,34 @@ class ValveItem(LinkItem):
         self.normal_pen = QPen(QColor(220, 20, 60), 2)  # Thicker for valves
         self.normal_pen.setCosmetic(True)
         self.setPen(self.normal_pen)
+
+class LabelItem(QGraphicsSimpleTextItem):
+    """Graphics item for Map Labels."""
+    
+    def __init__(self, label, max_y=0):
+        super().__init__(label.text)
+        self.label = label
+        self.max_y = max_y
+        
+        # Flip Y coordinate
+        self.setPos(label.x, max_y - label.y)
+        
+        self.setFlag(QGraphicsItem.ItemIsSelectable)
+        self.setFlag(QGraphicsItem.ItemIsMovable)
+        self.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
+        self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        
+        self.setBrush(QBrush(Qt.black))
+        self.setFont(QFont("Arial", 10))
+        
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemPositionChange:
+            # Update label model coordinates
+            self.label.x = value.x()
+            self.label.y = self.max_y - value.y()
+        elif change == QGraphicsItem.ItemSelectedChange:
+            if value:
+                self.setBrush(QBrush(Qt.red))
+            else:
+                self.setBrush(QBrush(Qt.black))
+        return super().itemChange(change, value)

@@ -687,6 +687,12 @@ class MainWindow(QMainWindow):
         self.add_valve_action.setToolTip("Add Valve")
         self.add_valve_action.triggered.connect(lambda: self.set_interaction_mode('add_valve'))
         self.std_toolbar.addAction(self.add_valve_action)
+
+        self.add_label_action = QAction(self.create_icon_from_text("🏷️"), "Add Label", self)
+        self.add_label_action.setCheckable(True)
+        self.add_label_action.setToolTip("Add Label")
+        self.add_label_action.triggered.connect(lambda: self.set_interaction_mode('add_label'))
+        self.std_toolbar.addAction(self.add_label_action)
         
         self.std_toolbar.addSeparator()
         
@@ -1488,6 +1494,11 @@ class MainWindow(QMainWindow):
             self.add_pipe_action.setChecked(mode == 'add_pipe')
             self.add_pump_action.setChecked(mode == 'add_pump')
             self.add_valve_action.setChecked(mode == 'add_valve')
+            self.add_label_action.setChecked(mode == 'add_label')
+        
+        # Update map widget
+        if hasattr(self, 'map_widget'):
+            self.map_widget.set_interaction_mode(mode)
 
     
     # View operations

@@ -15,6 +15,7 @@ class Network:
         self.links: Dict[str, Link] = {}
         self.patterns: Dict[str, Pattern] = {}
         self.curves: Dict[str, Curve] = {}
+        self.labels: Dict[str, Any] = {} # Dict[str, Label]
         self.options: Options = Options()
         
         # Project metadata
@@ -173,6 +174,23 @@ class Network:
                         f"it is referenced by pump {link.id}"
                     )
             del self.curves[curve_id]
+            
+    # Label operations
+    
+    def add_label(self, label):
+        """Add a label to the network."""
+        if label.id in self.labels:
+            raise ValueError(f"Label {label.id} already exists")
+        self.labels[label.id] = label
+        
+    def get_label(self, label_id: str):
+        """Get label by ID."""
+        return self.labels.get(label_id)
+        
+    def remove_label(self, label_id: str):
+        """Remove label from network."""
+        if label_id in self.labels:
+            del self.labels[label_id]
     
     # Utility methods
     

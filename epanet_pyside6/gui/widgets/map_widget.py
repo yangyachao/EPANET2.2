@@ -123,11 +123,68 @@ class MapWidget(QGraphicsView):
             if node_id:
                 self.scene.add_node(node_id)
             
+            # Adding Label
+            if self.interaction_mode == 'add_label':
+                from PySide6.QtWidgets import QInputDialog
+                text, ok = QInputDialog.getText(self, "Add Label", "Label Text:")
+                if ok and text:
+                    # Convert to logical Y
+                    logical_y = self.scene.max_y - pos.y()
+                    label_id = self.project.add_label(text, pos.x(), logical_y)
+                    self.scene.add_label(label_id)
+            
             # Refresh scene
             self.scene.update_scene_rect()
             return
 
         super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        """Handle key press events."""
+        if event.key() == Qt.Key_Delete or event.key() == Qt.Key_Backspace:
+            self.delete_selected_items()
+        else:
+            super().keyPressEvent(event)
+            
+    def delete_selected_items(self):
+        """Delete selected items."""
+        from PySide6.QtWidgets import QMessageBox
+        
+        selected_items = self.scene.selectedItems()
+        if not selected_items:
+            return
+            
+        # Ask for confirmation
+        reply = QMessageBox.question(self, "Delete Objects", 
+                                   f"Delete {len(selected_items)} selected object(s)?",
+                                   QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                                   
+        if reply == QMessageBox.Yes:
+            for item in selected_items:
+                if hasattr(item, 'node'):
+                    try:
+                        self.project.delete_node(item.node.id)
+                        self.scene.removeItem(item)
+                        # Also remove connected links from scene?
+                        # Scene update might be needed or manual removal
+                        # For now, let's just refresh scene completely or handle individually
+                    except Exception as e:
+                        print(f"Error deleting node: {e}")
+                elif hasattr(item, 'link'):
+                    try:
+                        self.project.delete_link(item.link.id)
+                        self.scene.removeItem(item)
+                    except Exception as e:
+                        print(f"Error deleting link: {e}")
+                elif hasattr(item, 'label'):
+                    try:
+                        self.project.delete_label(item.label.id)
+                        self.scene.removeItem(item)
+                    except Exception as e:
+                        print(f"Error deleting label: {e}")
+            
+            # Refresh scene to clean up any artifacts
+            self.scene.update()
 
     def mouseMoveEvent(self, event):
         if self.temp_link_line:

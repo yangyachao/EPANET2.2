@@ -335,3 +335,24 @@ class MapWidget(QGraphicsView):
         main_window = self.window()
         if hasattr(main_window, 'show_map_options'):
             main_window.show_map_options()
+
+    def zoom_to_object(self, obj_type, obj_id):
+        """Zoom to and highlight a specific object."""
+        item = None
+        if obj_type == "Node":
+            item = self.scene.node_items.get(obj_id)
+        elif obj_type == "Link":
+            item = self.scene.link_items.get(obj_id)
+            
+        if item:
+            # Center view on item
+            self.centerOn(item)
+            
+            # Select and highlight
+            self.scene.clearSelection()
+            item.setSelected(True)
+            
+            # Optional: Zoom in if too far out?
+            # self.scale(1.5, 1.5) # Maybe not force zoom, just center
+            
+            print(f"DEBUG: Zoomed to {obj_type} {obj_id}")

@@ -735,6 +735,14 @@ class MainWindow(QMainWindow):
         map_options_action = QAction(self.create_icon_from_text("⚙️"), "Map Options", self)
         map_options_action.triggered.connect(self.show_map_options)
         self.std_toolbar.addAction(map_options_action)
+        
+        self.std_toolbar.addSeparator()
+        
+        # Find Object
+        find_action = QAction(self.create_icon_from_text("🔍"), "Find", self)
+        find_action.setToolTip("Find Object")
+        find_action.triggered.connect(self.find_object)
+        self.std_toolbar.addAction(find_action)
     
     def create_dock_widgets(self):
         """Create dock widgets."""
@@ -1514,16 +1522,14 @@ class MainWindow(QMainWindow):
     def full_extent(self):
         """Zoom to full network extent."""
         self.map_widget.fit_network()
-        
     def find_object(self):
         """Show find object dialog."""
-        from gui.dialogs import FindObjectDialog
-        
+        from gui.dialogs.find_dialog import FindObjectDialog
         dialog = FindObjectDialog(self.project, self)
-        
-        # Connect signal to select object
+
         def on_object_selected(obj_type, obj_id):
             try:
+                self.map_widget.zoom_to_object(obj_type, obj_id)
                 # Simulate browser activation to select and center object
                 self.on_browser_object_activated(obj_type, obj_id)
                 self.status_bar.showMessage(f"Found {obj_type}: {obj_id}")

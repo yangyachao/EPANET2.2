@@ -838,6 +838,10 @@ class MainWindow(QMainWindow):
                 # Open curve editor
                 self.edit_curve(obj_id)
                 return
+            elif obj_type == 'Control':
+                # Open controls editor
+                self.edit_controls()
+                return
             elif obj_type == 'Node':
                 obj = self.project.network.get_node(obj_id)
             elif obj_type == 'Link':
@@ -1267,11 +1271,21 @@ class MainWindow(QMainWindow):
         energy_view = EnergyView(self.project)
         
         subwindow = self.mdi_area.addSubWindow(energy_view)
+
         subwindow.setWindowTitle("Energy Report")
         subwindow.showMaximized()
     
     # Data Editors
     
+    def edit_controls(self):
+        """Open controls editor."""
+        from gui.dialogs.controls_editor import ControlsEditorDialog
+        dialog = ControlsEditorDialog(self.project, self)
+        if dialog.exec():
+            self.project.modified = True
+            self.browser_widget.refresh()
+            self.status_bar.showMessage("Controls updated")
+
     def edit_pattern(self, pattern_id: str):
         """Open pattern editor dialog."""
         from gui.dialogs import PatternEditor

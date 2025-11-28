@@ -66,6 +66,8 @@ class ProjectTree(QTreeWidget):
             return 'Pattern'
         elif category == "Curves":
             return 'Curve'
+        elif category in ("Simple Controls", "Rules"):
+            return 'Control'
         return None
         
     def refresh(self):
@@ -98,6 +100,16 @@ class ProjectTree(QTreeWidget):
         for cid in self.project.network.curves:
             QTreeWidgetItem(curves_item, [cid])
         curves_item.setText(0, f"Curves ({len(self.project.network.curves)})")
+        
+        # Controls & Rules
+        controls_item = QTreeWidgetItem(self, ["Controls"])
+        controls_item.setText(0, f"Controls ({len(self.project.network.controls) + len(self.project.network.rules)})")
+        
+        simple_item = QTreeWidgetItem(controls_item, ["Simple Controls"])
+        simple_item.setText(0, f"Simple Controls ({len(self.project.network.controls)})")
+        
+        rules_item = QTreeWidgetItem(controls_item, ["Rules"])
+        rules_item.setText(0, f"Rules ({len(self.project.network.rules)})")
         
     def _add_category(self, parent, name, items):
         item = QTreeWidgetItem(parent, [name])

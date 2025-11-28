@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 from models import Node, Junction, Reservoir, Tank
 from models import Link, Pipe, Pump, Valve
 from models import Pattern, Curve, Options
+from models.control import SimpleControl, Rule
 
 
 class Network:
@@ -15,6 +16,8 @@ class Network:
         self.links: Dict[str, Link] = {}
         self.patterns: Dict[str, Pattern] = {}
         self.curves: Dict[str, Curve] = {}
+        self.controls: List[SimpleControl] = []
+        self.rules: List[Rule] = []
         self.labels: Dict[str, Any] = {} # Dict[str, Label]
         self.options: Options = Options()
         
@@ -41,6 +44,8 @@ class Network:
         self.links.clear()
         self.patterns.clear()
         self.curves.clear()
+        self.controls.clear()
+        self.rules.clear()
         self.options = Options()
         self.title = ["", "", ""]
         self.notes = ""

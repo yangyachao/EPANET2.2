@@ -14,7 +14,9 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.project import EPANETProject
+from core.exceptions import InputFileError
 from gui.widgets import BrowserWidget, PropertyEditor, MapWidget, OverviewMapWidget
+from gui.dialogs.input_error_dialog import InputErrorDialog
 
 
 class MainWindow(QMainWindow):
@@ -114,6 +116,9 @@ class MainWindow(QMainWindow):
             
             # Move to top of list
             self.add_recent_file(filename)
+        except InputFileError as e:
+            dialog = InputErrorDialog(e.errors, self)
+            dialog.exec()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open project:\n{str(e)}")
     
@@ -386,6 +391,10 @@ class MainWindow(QMainWindow):
         reaction_report_action = QAction("&Reaction", self)
         reaction_report_action.triggered.connect(self.show_reaction_report)
         report_menu.addAction(reaction_report_action)
+        
+        full_report_action = QAction("&Full Report...", self)
+        full_report_action.triggered.connect(self.show_full_report)
+        report_menu.addAction(full_report_action)
         
         report_menu.addSeparator()
         
@@ -791,9 +800,7 @@ class MainWindow(QMainWindow):
         self.overview_dock.setWidget(self.overview_map)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.overview_dock)
         
-        # Connect map view changes to overview
-        self.map_widget.horizontalScrollBar().valueChanged.connect(lambda: self.overview_map.update_extent())
-        self.map_widget.verticalScrollBar().valueChanged.connect(lambda: self.overview_map.update_extent())
+
         
         
         # Add toggle actions to View menu
@@ -970,6 +977,9 @@ class MainWindow(QMainWindow):
                 self.update_title()
                 self.status_bar.showMessage(f"Opened {filename}")
                 self.add_recent_file(filename)
+            except InputFileError as e:
+                dialog = InputErrorDialog(e.errors, self)
+                dialog.exec()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to open project:\n{str(e)}")
     
@@ -1047,6 +1057,9 @@ class MainWindow(QMainWindow):
                 self.update_title()
                 self.status_bar.showMessage(f"Imported network from {filename}")
                 self.add_recent_file(filename)
+            except InputFileError as e:
+                dialog = InputErrorDialog(e.errors, self)
+                dialog.exec()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to import network:\n{str(e)}")
                 
@@ -1520,6 +1533,59 @@ class MainWindow(QMainWindow):
         dialog = PreferencesDialog(self)
         if dialog.exec():
             self.status_bar.showMessage("Preferences updated")
+
+    def export_network(self):
+        """Show export network data dialog."""
+        from gui.dialogs.export_dialog import ExportDialog
+        dialog = ExportDialog(self.project, self)
+        dialog.exec()
+        
+    def export_map(self):
+        """Show export map dialog."""
+        from gui.dialogs.map_export_dialog import MapExportDialog
+        dialog = MapExportDialog(self.map_widget, self)
+        dialog.exec()
+        
+    def export_scenario(self):
+        """Export scenario (placeholder)."""
+        # TODO: Implement scenario export
+        QMessageBox.information(self, "Export Scenario", "Scenario export not implemented yet.")
+        
+    def show_full_report(self):
+        """Generate and show full report."""
+        filepath, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Full Report",
+            "",
+            "Text Files (*.txt)"
+        )
+        
+        if not filepath:
+            return
+            
+        if not filepath.endswith(".txt"):
+            filepath += ".txt"
+            
+        try:
+            from core.export_utils import ExportUtils
+            ExportUtils.generate_full_report(self.project, filepath)
+            
+            QMessageBox.information(
+                self,
+                "Report Generated",
+                f"Full report generated successfully:\n{filepath}"
+            )
+            
+            # Optionally open the file
+            # QDesktopServices.openUrl(QUrl.fromLocalFile(filepath))
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Report Error",
+                f"Failed to generate report:\n{str(e)}"
+            )
+
 
     def show_analysis_options(self):
         """Show analysis options dialog."""

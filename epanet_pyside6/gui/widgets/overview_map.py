@@ -1,96 +1,102 @@
-"""Overview map widget."""
+"""Overview Map widget for quick navigation."""
 
 from PySide6.QtWidgets import QGraphicsView
-from PySide6.QtCore import Qt, QRectF
+from PySide6.QtCore import Qt, QRectF, Signal, QPointF
 from PySide6.QtGui import QPainter, QPen, QColor, QBrush
 
 class OverviewMapWidget(QGraphicsView):
-    """Overview map widget showing the full network extent."""
+    """Overview map widget."""
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.main_view = None
-        self.viewport_rect = QRectF()
+        self.main_map = None
         
+        # View settings
+        self.setRenderHint(QPainter.Antialiasing)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setDragMode(QGraphicsView.NoDrag)
         
-        # Optimization
-        self.setOptimizationFlag(QGraphicsView.DontSavePainterState)
-        self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+        self.is_dragging = False
         
-    def set_main_view(self, view):
-        """Set the main map view to track."""
-        self.main_view = view
-        # Handle case where scene is an attribute (shadowing method)
-        if callable(view.scene):
-            self.setScene(view.scene())
-        else:
-            self.setScene(view.scene)
+    def set_main_view(self, main_map):
+        """Set the main map widget to track."""
+        self.main_map = main_map
+        self.setScene(main_map.scene)
+        
+        # Connect signals
+        # Hook into main map's scrollbars and resize events
+        self.main_map.horizontalScrollBar().valueChanged.connect(self.update_overview)
+        self.main_map.verticalScrollBar().valueChanged.connect(self.update_overview)
+        
+        self.main_map.horizontalScrollBar().rangeChanged.connect(lambda min, max: self.update_overview())
+        self.main_map.verticalScrollBar().rangeChanged.connect(lambda min, max: self.update_overview())
         
         # Initial update
-        self.update_extent()
+        self.fit_network()
         
-    def update_extent(self):
-        """Update the overview extent and viewport rectangle."""
-        if not self.main_view or not self.scene():
+    def resizeEvent(self, event):
+        """Handle resize to fit network."""
+        super().resizeEvent(event)
+        self.fit_network()
+        
+    def fit_network(self):
+        """Fit the entire network in view."""
+        if not self.scene():
             return
             
-        # Fit the whole scene in this view
-        # We use itemsBoundingRect to ensure we see everything
-        scene_rect = self.scene().itemsBoundingRect()
-        if not scene_rect.isNull():
-            self.fitInView(scene_rect, Qt.KeepAspectRatio)
+        # Get scene bounding rect or use a large fixed rect if empty
+        rect = self.scene().itemsBoundingRect()
+        if rect.isNull() or rect.width() == 0 or rect.height() == 0:
+            rect = self.scene().sceneRect()
+            
+        # Add some margin
+        margin = max(rect.width(), rect.height()) * 0.1
+        rect.adjust(-margin, -margin, margin, margin)
         
-        # Calculate the visible rect of the main view in scene coordinates
-        # mapToScene(viewport().rect()) gives a polygon, we take bounding rect
-        self.viewport_rect = self.main_view.mapToScene(self.main_view.viewport().rect()).boundingRect()
+        self.fitInView(rect, Qt.KeepAspectRatio)
         
-        # Force redraw of foreground
+    def update_overview(self):
+        """Trigger update of the overview map."""
         self.viewport().update()
         
     def drawForeground(self, painter, rect):
-        """Draw the viewport rectangle."""
-        if not self.viewport_rect.isValid():
+        """Draw the viewport box."""
+        super().drawForeground(painter, rect)
+        
+        if not self.main_map:
             return
             
-        painter.save()
+        # Get visible rect of main map in scene coordinates
+        viewport_rect = self.main_map.viewport().rect()
+        scene_rect = self.main_map.mapToScene(viewport_rect).boundingRect()
         
-        # Draw red rectangle representing main view
-        pen = QPen(QColor(255, 0, 0, 200))
-        pen.setWidth(2)
-        # Scale pen width to remain constant size on screen? 
-        # No, let's keep it simple for now. 
-        # Actually, if we zoom out a lot in overview, 2 pixels might be too thin or thick relative to scene?
-        # Since drawForeground is in scene coords, a fixed width pen will scale with the view.
-        # To have a cosmetic pen (constant screen width), we use setCosmetic(True).
-        pen.setCosmetic(True)
-        
-        painter.setPen(pen)
+        # Draw red box
+        painter.setPen(QPen(QColor(255, 0, 0), 2))
         painter.setBrush(QBrush(QColor(255, 0, 0, 50)))
-        painter.drawRect(self.viewport_rect)
-        
-        painter.restore()
+        painter.drawRect(scene_rect)
         
     def mousePressEvent(self, event):
-        """Handle mouse press to center main view."""
+        """Handle mouse press to center main map."""
         if event.button() == Qt.LeftButton:
-            self._move_main_view(event.pos())
+            scene_pos = self.mapToScene(event.pos())
+            self.is_dragging = True
+            self.center_main_map(scene_pos)
             
     def mouseMoveEvent(self, event):
-        """Handle mouse drag to move main view."""
-        if event.buttons() & Qt.LeftButton:
-            self._move_main_view(event.pos())
+        """Handle drag to pan main map."""
+        if self.is_dragging:
+            scene_pos = self.mapToScene(event.pos())
+            self.center_main_map(scene_pos)
             
-    def _move_main_view(self, pos):
-        """Move main view to center on the given position."""
-        if not self.main_view:
-            return
-        
-        # Map pos to scene coords
-        scene_pos = self.mapToScene(pos)
-        self.main_view.centerOn(scene_pos)
-        
-        # Update our rect immediately (though main view signals should also trigger it)
-        self.update_extent()
+    def mouseReleaseEvent(self, event):
+        """Stop dragging."""
+        if event.button() == Qt.LeftButton:
+            self.is_dragging = False
+            
+    def center_main_map(self, scene_pos):
+        """Center the main map on the given scene position."""
+        if self.main_map:
+            self.main_map.centerOn(scene_pos)
+            self.update_overview()
+

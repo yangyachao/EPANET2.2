@@ -6,6 +6,7 @@ import os
 import tempfile
 from typing import Optional, Dict, Any, Tuple
 from .constants import NodeType, LinkType, NodeParam, LinkParam
+from .exceptions import InputFileError
 
 class Engine:
     """Wrapper for WNTR engine."""
@@ -21,7 +22,12 @@ class Engine:
             self.wn = wntr.network.WaterNetworkModel(filename)
             self.results = None
         except Exception as e:
-            raise RuntimeError(f"Failed to open project: {e}")
+            # The error 'e' from wntr might contain detailed information.
+            # We are wrapping it in a custom exception to be caught by the UI.
+            # The str(e) often contains the formatted error messages from EPANET.
+            # We can parse this string if needed to get more structured error data.
+            errors = str(e).split('\n')
+            raise InputFileError(f"Failed to open project: {e}", errors=errors)
             
     def save_project(self, filename: str):
         """Save project to file."""

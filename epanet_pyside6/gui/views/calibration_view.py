@@ -77,6 +77,10 @@ class CalibrationView(QWidget):
         update_btn.clicked.connect(self.update_comparison)
         action_layout.addWidget(update_btn)
         
+        export_btn = QPushButton("Export Report...")
+        export_btn.clicked.connect(self.export_report)
+        action_layout.addWidget(export_btn)
+        
         left_panel.addLayout(action_layout)
         
         # Statistics
@@ -249,3 +253,39 @@ class CalibrationView(QWidget):
                 corr = 0.0
                 
             self.stats_label.setText(f"Statistics:\nRMSE: {rmse:.4f}\nCorrelation: {corr:.4f}")
+
+    def export_report(self):
+        """Export calibration report."""
+        if not self.observed_data:
+            QMessageBox.warning(self, "No Data", "No calibration data to export.")
+            return
+            
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Export Report", "", "Text Files (*.txt);;All Files (*)"
+        )
+        
+        if not filename:
+            return
+            
+        if not filename.endswith('.txt'):
+            filename += '.txt'
+            
+        try:
+            with open(filename, 'w') as f:
+                f.write("EPANET Calibration Report\n")
+                f.write("=========================\n\n")
+                
+                # Statistics
+                f.write(self.stats_label.text().replace('\n', '\n') + "\n\n")
+                
+                # Data Table
+                f.write(f"{'Type':<10} {'ID':<15} {'Parameter':<15} {'Observed':<15} {'Simulated':<15}\n")
+                f.write("-" * 70 + "\n")
+                
+                for data in self.observed_data:
+                    f.write(f"{data['type']:<10} {data['id']:<15} {data['param'].name:<15} {data['value']:<15.2f} {data['simulated']:<15.2f}\n")
+                    
+            QMessageBox.information(self, "Export Successful", f"Report exported to:\n{filename}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Export Failed", str(e))

@@ -410,3 +410,29 @@ class NetworkScene(QGraphicsScene):
         
         # Update the scene
         self.update()
+    
+    def highlight_query_results(self, obj_type, matching_ids):
+        """Highlight objects matching query results."""
+        # Clear previous selection
+        self.clearSelection()
+        
+        if obj_type == "Nodes":
+            for node_id in matching_ids:
+                if node_id in self.node_items:
+                    item = self.node_items[node_id]
+                    item.setSelected(True)
+                    # Optionally change appearance
+                    pen = item.pen()
+                    pen.setColor(QColor(255, 0, 0))  # Red highlight
+                    pen.setWidth(3)
+                    item.setPen(pen)
+        else:  # Links
+            for link_id in matching_ids:
+                if link_id in self.link_items:
+                    item = self.link_items[link_id]
+                    item.setSelected(True)
+                    # Optionally change appearance
+                    pen = item.pen()
+                    pen.setColor(QColor(255, 0, 0))  # Red highlight
+                    pen.setWidth(3)
+                    item.setPen(pen)

@@ -248,6 +248,13 @@ class MainWindow(QMainWindow):
         group_edit_action.triggered.connect(self.group_edit)
         edit_menu.addAction(group_edit_action)
         
+        edit_menu.addSeparator()
+        
+        preferences_action = QAction("&Preferences...", self)
+        preferences_action.setMenuRole(QAction.MenuRole.NoRole)  # Prevent macOS from moving it
+        preferences_action.triggered.connect(self.show_preferences)
+        edit_menu.addAction(preferences_action)
+        
         # View Menu
         self.view_menu = menubar.addMenu("&View")
         
@@ -295,7 +302,10 @@ class MainWindow(QMainWindow):
         find_action.triggered.connect(self.find_object)
         self.view_menu.addAction(find_action)
         
-        self.view_menu.addSeparator()
+        # Query
+        query_action = QAction("&Query...", self)
+        query_action.triggered.connect(self.show_query)
+        self.view_menu.addAction(query_action)
         
         self.view_menu.addSeparator()
         
@@ -1435,6 +1445,81 @@ class MainWindow(QMainWindow):
             self.map_widget.fit_network()
             
             self.status_bar.showMessage("Map dimensions updated")
+
+    def show_query(self):
+        """Show query dialog."""
+        from gui.dialogs.query_dialog import QueryDialog
+        dialog = QueryDialog(self.project, self)
+        dialog.query_executed.connect(self.execute_query)
+        dialog.exec()
+        
+    def execute_query(self, obj_type, parameter, operator, value):
+        """Execute query and highlight matching objects on map."""
+        matching_ids = []
+        
+        if obj_type == "Nodes":
+            for node_id, node in self.project.network.nodes.items():
+                node_value = self.get_node_param_value(node, parameter)
+                if node_value is not None and self.compare_values(node_value, operator, value):
+                    matching_ids.append(node_id)
+        else:  # Links
+            for link_id, link in self.project.network.links.items():
+                link_value = self.get_link_param_value(link, parameter)
+                if link_value is not None and self.compare_values(link_value, operator, value):
+                    matching_ids.append(link_id)
+        
+        # Highlight on map
+        self.map_widget.scene.highlight_query_results(obj_type, matching_ids)
+        
+    def get_node_param_value(self, node, parameter):
+        """Get node parameter value for query."""
+        param_map = {
+            "Elevation": "elevation",
+            "Base Demand": "base_demand",
+            "Initial Quality": "init_quality",
+            "Demand": "demand",
+            "Head": "head",
+            "Pressure": "pressure",
+            "Quality": "quality"
+        }
+        attr = param_map.get(parameter)
+        return getattr(node, attr, None) if attr else None
+        
+    def get_link_param_value(self, link, parameter):
+        """Get link parameter value for query."""
+        param_map = {
+            "Length": "length",
+            "Diameter": "diameter",
+            "Roughness": "roughness",
+            "Flow": "flow",
+            "Velocity": "velocity",
+            "Headloss": "headloss"
+        }
+        attr = param_map.get(parameter)
+        return getattr(link, attr, None) if attr else None
+        
+    def compare_values(self, val1, operator, val2):
+        """Compare values based on operator."""
+        if operator == "=":
+            return abs(val1 - val2) < 0.001
+        elif operator == ">":
+            return val1 > val2
+        elif operator == "<":
+            return val1 < val2
+        elif operator == ">=":
+            return val1 >= val2
+        elif operator == "<=":
+            return val1 <= val2
+        elif operator == "!=":
+            return abs(val1 - val2) >= 0.001
+        return False
+        
+    def show_preferences(self):
+        """Show preferences dialog."""
+        from gui.dialogs.preferences_dialog import PreferencesDialog
+        dialog = PreferencesDialog(self)
+        if dialog.exec():
+            self.status_bar.showMessage("Preferences updated")
 
     def show_analysis_options(self):
         """Show analysis options dialog."""

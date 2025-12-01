@@ -2,6 +2,7 @@
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QComboBox, QLabel, QHBoxLayout, QPushButton, QFileDialog
 import pyqtgraph as pg
+import pandas as pd
 from core.constants import NodeParam, LinkParam
 
 class GraphView(QWidget):
@@ -271,25 +272,75 @@ class GraphView(QWidget):
         self.plot_widget.plot(all_values, y, pen=self.get_pen(0), name="Frequency")
 
     def plot_system_flow(self):
-        """Plot system flow (Total Demand vs Time)."""
-        # Calculate total demand for all nodes at each time step
+        """Plot system flow (Produced, Consumed, Stored)."""
         results = self.project.engine.results
-        if not results or 'demand' not in results.node: return
+        if not results: return
         
-        demand = results.node['demand'] # DataFrame: index=time, columns=node_ids
-        # Sum across columns (axis=1)
-        total_demand = demand.sum(axis=1)
+        # 1. Total Consumption (Demand at Junctions)
+        if 'demand' in results.node:
+            demand = results.node['demand']
+            junctions = [n.id for n in self.project.network.get_junctions()]
+            if junctions:
+                valid_junctions = [j for j in junctions if j in demand.columns]
+                if valid_junctions:
+                    consumed = demand[valid_junctions].sum(axis=1)
+                else:
+                    consumed = demand.sum(axis=1) * 0
+            else:
+                consumed = demand.sum(axis=1) * 0
+        else:
+            return
+
+        # 2. Total Production (Net Outflow from Reservoirs)
+        reservoirs = [n.id for n in self.project.network.get_reservoirs()]
+        produced = pd.Series(0.0, index=consumed.index)
         
-        times = total_demand.index / 3600.0 # Convert seconds to hours
-        values = total_demand.values
+        if reservoirs and 'flowrate' in results.link:
+            flow = results.link['flowrate']
+            res_set = set(reservoirs)
+            
+            for link_id, link in self.project.network.links.items():
+                if link_id not in flow.columns:
+                    continue
+                link_flow = flow[link_id]
+                
+                # If link starts at reservoir, it's outflow (production)
+                if link.from_node in res_set:
+                    produced += link_flow
+                # If link ends at reservoir, it's inflow (negative production)
+                if link.to_node in res_set:
+                    produced -= link_flow
+
+        # 3. Total Stored (Net Inflow to Tanks)
+        tanks = [n.id for n in self.project.network.get_tanks()]
+        stored = pd.Series(0.0, index=consumed.index)
+        
+        if tanks and 'flowrate' in results.link:
+            flow = results.link['flowrate']
+            tank_set = set(tanks)
+            
+            for link_id, link in self.project.network.links.items():
+                if link_id not in flow.columns:
+                    continue
+                link_flow = flow[link_id]
+                
+                # If link ends at tank, it's inflow (storage)
+                if link.to_node in tank_set:
+                    stored += link_flow
+                # If link starts at tank, it's outflow (negative storage/emptying)
+                if link.from_node in tank_set:
+                    stored -= link_flow
+            
+        times = consumed.index / 3600.0
         
         self.plot_widget.setLabel('bottom', 'Time (hours)')
-        self.plot_widget.setLabel('left', 'Total Demand')
+        self.plot_widget.setLabel('left', 'Flow')
         self.plot_widget.setTitle("System Flow Balance")
-        self.plot_widget.plot(times, values, pen=self.get_pen(0), name="Total Demand")
+        self.plot_widget.addLegend()
         
-        # Could also add Total Production (Reservoirs + Tanks?)
-        # For now just Total Demand is a good start.
+        self.plot_widget.plot(times, produced.values, pen=pg.mkPen('g', width=2), name="Produced")
+        self.plot_widget.plot(times, consumed.values, pen=pg.mkPen('r', width=2), name="Consumed")
+        self.plot_widget.plot(times, stored.values, pen=pg.mkPen('b', width=2), name="Stored")
 
     def show_options(self):
         """Show graph options dialog."""

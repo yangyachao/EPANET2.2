@@ -215,6 +215,20 @@ class Network:
         """Get total number of links."""
         return len(self.links)
     
+    @property
+    def graph(self):
+        """Get networkx graph representation."""
+        import networkx as nx
+        G = nx.MultiDiGraph()
+        
+        for node_id, node in self.nodes.items():
+            G.add_node(node_id, pos=(node.x, node.y))
+            
+        for link_id, link in self.links.items():
+            G.add_edge(link.from_node, link.to_node, id=link_id, weight=link.length if hasattr(link, 'length') else 0)
+            
+        return G
+
     def validate(self) -> List[str]:
         """Validate network data.
         

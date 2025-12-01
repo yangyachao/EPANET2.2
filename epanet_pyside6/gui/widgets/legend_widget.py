@@ -92,8 +92,28 @@ class LegendWidget(QWidget):
         from PySide6.QtWidgets import QMenu
         menu = QMenu(self)
         options_action = menu.addAction("Options...")
-        options_action.triggered.connect(self.options_requested.emit)
+        options_action.triggered.connect(self.show_options)
         menu.exec(event.globalPos())
+        
+    def show_options(self):
+        """Show legend editor options."""
+        from gui.dialogs.legend_editor import LegendEditorDialog
+        
+        # Prepare data
+        data = {
+            'values': self.values,
+            'colors': self.colors
+        }
+        
+        dialog = LegendEditorDialog(data, self)
+        if dialog.exec():
+            new_data = dialog.get_data()
+            self.values = new_data['values']
+            self.colors = new_data['colors']
+            self.scale_widget.update()
+            
+            # Emit signal that options changed (so map can redraw if needed)
+            self.options_requested.emit()
 
 
 class LegendScale(QWidget):
@@ -116,18 +136,35 @@ class LegendScale(QWidget):
         
         # Draw color boxes
         num_intervals = len(self.parent_legend.colors)
+        if num_intervals == 0:
+            return
+            
         box_h = h / num_intervals
         
         for i, color in enumerate(self.parent_legend.colors):
-            box_rect = (x, y + i * box_h, w, box_h)
+            # Invert Y because index 0 is usually low value (bottom) but we draw top-down
+            # Actually EPANET legend usually has low values at bottom.
+            # Let's assume colors[0] corresponds to values[0] (low)
+            # So we draw from bottom up
+            
+            y_pos = y + h - (i + 1) * box_h
+            
+            box_rect = (x, y_pos, w, box_h)
             painter.fillRect(*box_rect, color)
             painter.drawRect(*box_rect)
             
             # Draw text
             if i < len(self.parent_legend.values):
-                val = self.parent_legend.values[len(self.parent_legend.values) - 1 - i]
+                val = self.parent_legend.values[i]
                 text = f"{val:.2f}"
-                painter.drawText(x + w + 10, int(y + i * box_h + box_h/2 + 5), text)
+                # Draw text aligned to the line between boxes
+                painter.drawText(x + w + 10, int(y_pos + box_h + 5), text)
                 
-        # Draw < and > labels
-        # This is a simplified version, real EPANET legend has intervals
+        # Draw last value (top)
+        if len(self.parent_legend.values) > len(self.parent_legend.colors):
+             val = self.parent_legend.values[-1]
+             text = f"{val:.2f}"
+             painter.drawText(x + w + 10, int(y + 5), text)
+
+
+

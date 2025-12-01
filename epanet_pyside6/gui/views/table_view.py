@@ -327,3 +327,83 @@ class TableView(QWidget):
                 self.table.setRowHidden(row, False)
             else:
                 self.table.setRowHidden(row, True)
+
+    def copy_to_clipboard(self):
+        """Copy selected rows (or all if none selected) to clipboard."""
+        from PySide6.QtGui import QGuiApplication
+        
+        selected_ranges = self.table.selectedRanges()
+        
+        # If no selection, select all visible
+        if not selected_ranges:
+            self.table.selectAll()
+            selected_ranges = self.table.selectedRanges()
+            
+        if not selected_ranges:
+            return
+            
+        text = ""
+        
+        # Headers
+        headers = []
+        for col in range(self.table.columnCount()):
+            headers.append(self.table.horizontalHeaderItem(col).text())
+        text += "\t".join(headers) + "\n"
+        
+        # Data
+        # Iterate over rows in the first range (assuming single selection mode or contiguous)
+        # For multiple ranges, it's more complex. Let's assume full rows for simplicity or just selected cells.
+        # Implementation for full rows of selection:
+        
+        rows = set()
+        for r in selected_ranges:
+            for row in range(r.topRow(), r.bottomRow() + 1):
+                if not self.table.isRowHidden(row):
+                    rows.add(row)
+                    
+        for row in sorted(rows):
+            row_data = []
+            for col in range(self.table.columnCount()):
+                item = self.table.item(row, col)
+                row_data.append(item.text() if item else "")
+            text += "\t".join(row_data) + "\n"
+            
+        QGuiApplication.clipboard().setText(text)
+        
+    def print_table(self, printer):
+        """Print table content."""
+        from PySide6.QtGui import QTextDocument, QTextCursor, QTextTableFormat
+        
+        # Create HTML representation
+        html = "<html><head><style>"
+        html += "table { border-collapse: collapse; width: 100%; }"
+        html += "th, td { border: 1px solid black; padding: 4px; text-align: center; }"
+        html += "th { background-color: #f2f2f2; }"
+        html += "</style></head><body>"
+        
+        html += f"<h2>{self.current_type} Report</h2>"
+        html += "<table>"
+        
+        # Headers
+        html += "<thead><tr>"
+        for col in range(self.table.columnCount()):
+            html += f"<th>{self.table.horizontalHeaderItem(col).text()}</th>"
+        html += "</tr></thead>"
+        
+        # Body
+        html += "<tbody>"
+        for row in range(self.table.rowCount()):
+            if self.table.isRowHidden(row):
+                continue
+                
+            html += "<tr>"
+            for col in range(self.table.columnCount()):
+                item = self.table.item(row, col)
+                text = item.text() if item else ""
+                html += f"<td>{text}</td>"
+            html += "</tr>"
+        html += "</tbody></table></body></html>"
+        
+        doc = QTextDocument()
+        doc.setHtml(html)
+        doc.print_(printer)

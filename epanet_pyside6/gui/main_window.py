@@ -134,7 +134,7 @@ class MainWindow(QMainWindow):
         # Create Map Window
         self.map_widget = MapWidget(self.project)
         self.map_widget.scene.selectionChanged.connect(self.on_map_selection_changed)
-        self.map_widget.options_requested.connect(self.show_map_options)
+        self.map_widget.options_requested.connect(self.on_legend_updated)
         self.map_subwindow = self.mdi_area.addSubWindow(self.map_widget)
         self.map_subwindow.setWindowTitle("Network Map")
         self.map_subwindow.showMaximized()
@@ -204,6 +204,21 @@ class MainWindow(QMainWindow):
         
         self.file_menu.addSeparator()
         
+        page_setup_action = QAction("Page Set&up...", self)
+        page_setup_action.triggered.connect(self.page_setup)
+        self.file_menu.addAction(page_setup_action)
+        
+        print_preview_action = QAction("Print Pre&view...", self)
+        print_preview_action.triggered.connect(self.print_preview)
+        self.file_menu.addAction(print_preview_action)
+        
+        print_action = QAction("&Print...", self)
+        print_action.setShortcut(QKeySequence.Print)
+        print_action.triggered.connect(self.print_current_view)
+        self.file_menu.addAction(print_action)
+        
+        self.file_menu.addSeparator()
+        
         self.exit_action = QAction("E&xit", self)
         self.exit_action.setShortcut(QKeySequence.Quit)
         self.exit_action.triggered.connect(self.close)
@@ -241,6 +256,13 @@ class MainWindow(QMainWindow):
         project_menu.addAction(run_action)
         # Edit Menu
         edit_menu = menubar.addMenu("&Edit")
+        
+        copy_action = QAction("&Copy to...", self)
+        copy_action.setShortcut(QKeySequence.Copy)
+        copy_action.triggered.connect(self.copy_current_view)
+        edit_menu.addAction(copy_action)
+        
+        edit_menu.addSeparator()
         
         select_all_action = QAction("Select &All", self)
         select_all_action.setShortcut("Ctrl+A")
@@ -1102,6 +1124,97 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to export network:\n{str(e)}")
                 
+    def page_setup(self):
+        """Configure page setup."""
+        from PySide6.QtPrintSupport import QPageSetupDialog, QPrinter
+        from PySide6.QtWidgets import QDialog
+        from PySide6.QtGui import QPainter
+        
+        if not hasattr(self, 'printer'):
+            self.printer = QPrinter(QPrinter.HighResolution)
+            
+        dialog = QPageSetupDialog(self.printer, self)
+        dialog.exec()
+        
+    def print_preview(self):
+        """Show print preview."""
+        from PySide6.QtPrintSupport import QPrintPreviewDialog, QPrinter
+        from PySide6.QtWidgets import QDialog
+        from PySide6.QtGui import QPainter
+        
+        if not hasattr(self, 'printer'):
+            self.printer = QPrinter(QPrinter.HighResolution)
+            
+        dialog = QPrintPreviewDialog(self.printer, self)
+        dialog.paintRequested.connect(self._print_document)
+        dialog.exec()
+        
+    def print_current_view(self):
+        """Print the current view."""
+        from PySide6.QtPrintSupport import QPrintDialog, QPrinter
+        from PySide6.QtWidgets import QDialog
+        from PySide6.QtGui import QPainter
+        
+        if not hasattr(self, 'printer'):
+            self.printer = QPrinter(QPrinter.HighResolution)
+            
+        dialog = QPrintDialog(self.printer, self)
+        if dialog.exec() == QDialog.Accepted:
+            self._print_document(self.printer)
+            
+    def _print_document(self, printer):
+        """Handle printing of the current document."""
+        # Determine active widget
+        # Check if browser dock is visible and showing table
+        # This is a bit tricky as we don't have a centralized "active view" concept yet
+        # except for the central widget which is MapWidget.
+        
+        # However, if the user is interacting with the Table View (which is a window or dock?),
+        # wait, TableView is not currently docked or central.
+        # Let's check where TableView is.
+        # Ah, we haven't integrated TableView into the main window permanently yet?
+        # It's usually opened via Report -> Table... which creates a new window or dialog?
+        # Let's check show_table method.
+        
+        # If we can't easily determine, we default to Map.
+        # But if we want to support Table printing, we need a way to know it's active.
+        
+        # For now, let's assume if the user invokes Print, they want to print the Map
+        # unless we add specific Print buttons to the Table window itself.
+        # Actually, standard GUI behavior is to print the active window.
+        
+        # Let's just print the Map for now as per original plan, 
+        # but if we want to support Table, we should probably add a Print button to the Table dialog/widget itself
+        # or make Table a central widget tab.
+        
+        painter = QPainter(printer)
+        self.map_widget.render(painter)
+        painter.end()
+        
+    def copy_current_view(self):
+        """Copy current view to clipboard."""
+        from PySide6.QtGui import QGuiApplication, QImage, QPixmap
+        
+        # Check if we have a focused widget that supports copy
+        focus_widget = QGuiApplication.focusWidget()
+        
+        if focus_widget:
+            # Check if it's our TableView or part of it
+            # Walk up hierarchy
+            parent = focus_widget
+            while parent:
+                if hasattr(parent, 'copy_to_clipboard'):
+                    parent.copy_to_clipboard()
+                    self.status_bar.showMessage("Table data copied to clipboard", 3000)
+                    return
+                parent = parent.parent()
+        
+        # Default to Map copy
+        clipboard = QGuiApplication.clipboard()
+        pixmap = self.map_widget.grab()
+        clipboard.setPixmap(pixmap)
+        self.status_bar.showMessage("Map copied to clipboard", 3000)
+                
     def export_map(self):
         """Export map to image file."""
         filename, _ = QFileDialog.getSaveFileName(
@@ -1719,9 +1832,9 @@ class MainWindow(QMainWindow):
     def on_time_changed(self, time_step):
         """Handle time step change."""
         self.current_time_step = time_step
-        self._update_map_colors()
+        self._update_map_colors(preserve_legend=True)
         
-    def _update_map_colors(self):
+    def _update_map_colors(self, preserve_legend=False):
         """Update map colors based on current parameters and time."""
         # Initialize current params if not set
         if not hasattr(self, 'current_node_param'): self.current_node_param = None
@@ -1732,15 +1845,24 @@ class MainWindow(QMainWindow):
         if not results:
             return
 
-        # Colors for legend (Blue -> Cyan -> Green -> Yellow -> Red)
-        colors = [QColor(0,0,255), QColor(0,255,255), QColor(0,255,0), QColor(255,255,0), QColor(255,0,0)]
+        # Default Colors (Blue -> Cyan -> Green -> Yellow -> Red)
+        default_colors = [QColor(0,0,255), QColor(0,255,255), QColor(0,255,0), QColor(255,255,0), QColor(255,0,0)]
+        
+        # Capture current legend states
+        node_legend_param = self.map_widget.node_legend.parameter_name
+        node_legend_colors = [QColor(c) for c in self.map_widget.node_legend.colors]
+        node_legend_values = list(self.map_widget.node_legend.values)
+        
+        link_legend_param = self.map_widget.link_legend.parameter_name
+        link_legend_colors = [QColor(c) for c in self.map_widget.link_legend.colors]
+        link_legend_values = list(self.map_widget.link_legend.values)
         
         # Update Nodes
         if self.current_node_param:
             param = self.current_node_param.lower()
             # Map UI names to WNTR result names
             param_map = {
-                "elevation": "elevation", # usually property, not result, but handled
+                "elevation": "elevation",
                 "base demand": "base_demand",
                 "basedemand": "base_demand",
                 "initial quality": "initial_quality",
@@ -1754,13 +1876,7 @@ class MainWindow(QMainWindow):
             
             values = {}
             if wntr_param in results.node:
-                # Get values for current time step
-                # results.node[param] is a DataFrame, index is time
                 try:
-                    # Get the row for the current time step (index)
-                    # Assuming time steps are sequential integers in slider matching result index
-                    # But WNTR results index is time in seconds.
-                    # We need to map slider index to time index.
                     times = results.node[wntr_param].index
                     if self.current_time_step < len(times):
                         t = times[self.current_time_step]
@@ -1770,30 +1886,36 @@ class MainWindow(QMainWindow):
                     print(f"Error getting node results: {e}")
             
             if values:
-                # Calculate min/max for legend
-                min_val = min(values.values())
-                max_val = max(values.values())
+                intervals = []
+                colors = []
                 
-                # Create 5 intervals
-                if min_val == max_val:
-                    intervals = [min_val] * 5
+                # Check if we should preserve existing legend
+                if preserve_legend and node_legend_param == self.current_node_param:
+                    intervals = node_legend_values
+                    colors = node_legend_colors
                 else:
-                    step = (max_val - min_val) / 4
-                    intervals = [min_val + i*step for i in range(5)]
+                    # Auto-scale
+                    min_val = min(values.values())
+                    max_val = max(values.values())
+                    colors = default_colors
+                    
+                    if min_val == max_val:
+                        intervals = [min_val] * 5
+                    else:
+                        step = (max_val - min_val) / 4
+                        intervals = [min_val + i*step for i in range(5)]
                 
                 # Update Legend
-                # TODO: Handle multiple legends (node/link) - for now just show node if selected
-                self.map_widget.legend.set_data(self.current_node_param, "", intervals, colors)
-                self.map_widget.legend.show()
+                self.map_widget.node_legend.set_data(self.current_node_param, "", intervals, colors)
+                self.map_widget.node_legend.show()
                 
                 # Update Scene
                 self.map_widget.scene.update_node_colors(values, colors, intervals)
             else:
-                self.map_widget.legend.hide()
+                self.map_widget.node_legend.hide()
                 self.map_widget.scene.update_node_colors({}, [], [])
         else:
-            if not self.current_link_param:
-                self.map_widget.legend.hide()
+            self.map_widget.node_legend.hide()
             self.map_widget.scene.update_node_colors({}, [], [])
 
         # Update Links
@@ -1805,7 +1927,7 @@ class MainWindow(QMainWindow):
                 "roughness": "roughness",
                 "flow": "flowrate",
                 "velocity": "velocity",
-                "unit headloss": "headloss", # check this
+                "unit headloss": "headloss",
                 "unitheadloss": "headloss",
                 "friction factor": "friction_factor",
                 "frictionfactor": "friction_factor",
@@ -1827,26 +1949,42 @@ class MainWindow(QMainWindow):
                     print(f"Error getting link results: {e}")
             
             if values:
-                # Calculate min/max
-                min_val = min(values.values())
-                max_val = max(values.values())
+                intervals = []
+                colors = []
                 
-                if min_val == max_val:
-                    intervals = [min_val] * 5
+                # Check if we should preserve existing legend
+                if preserve_legend and link_legend_param == self.current_link_param:
+                    intervals = link_legend_values
+                    colors = link_legend_colors
                 else:
-                    step = (max_val - min_val) / 4
-                    intervals = [min_val + i*step for i in range(5)]
+                    # Auto-scale
+                    min_val = min(values.values())
+                    max_val = max(values.values())
+                    colors = default_colors
+                    
+                    if min_val == max_val:
+                        intervals = [min_val] * 5
+                    else:
+                        step = (max_val - min_val) / 4
+                        intervals = [min_val + i*step for i in range(5)]
                 
-                # Update Legend (Override node legend for now if link selected)
-                # Ideally we need two legends or a switch
-                self.map_widget.legend.set_data(self.current_link_param, "", intervals, colors)
-                self.map_widget.legend.show()
+                # Update Legend
+                self.map_widget.link_legend.set_data(self.current_link_param, "", intervals, colors)
+                self.map_widget.link_legend.show()
                 
+                # Update Scene
                 self.map_widget.scene.update_link_colors(values, colors, intervals)
             else:
+                self.map_widget.link_legend.hide()
                 self.map_widget.scene.update_link_colors({}, [], [])
         else:
+            self.map_widget.link_legend.hide()
             self.map_widget.scene.update_link_colors({}, [], [])
+
+    def on_legend_updated(self):
+        """Handle legend updates from editor."""
+        # Force update map colors but preserve the new legend settings
+        self._update_map_colors(preserve_legend=True)
     
     # Backdrop Handlers
     

@@ -24,10 +24,14 @@ class MapWidget(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
         
-        # Legend
-        self.legend = LegendWidget("Legend", self)
-        self.legend.hide()
-        self.legend.options_requested.connect(self.options_requested.emit)
+        # Legends
+        self.node_legend = LegendWidget("Node Legend", self)
+        self.node_legend.hide()
+        self.node_legend.options_requested.connect(self.options_requested.emit)
+        
+        self.link_legend = LegendWidget("Link Legend", self)
+        self.link_legend.hide()
+        self.link_legend.options_requested.connect(self.options_requested.emit)
         
         # Link drawing state
         self.drawing_link_start_node = None
@@ -300,8 +304,11 @@ class MapWidget(QGraphicsView):
     def resizeEvent(self, event):
         """Handle resize to position legend."""
         super().resizeEvent(event)
-        # Position legend in top-left corner
-        self.legend.move(10, 10)
+        # Position legends
+        self.node_legend.move(10, 10)
+        # Position link legend below node legend (approximate height + margin)
+        # Or we can let them be draggable and just set initial pos
+        self.link_legend.move(10, 220)
         
         if self._first_resize:
             self._first_resize = False

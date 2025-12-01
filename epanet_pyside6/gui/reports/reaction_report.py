@@ -1,66 +1,55 @@
-"""Reaction report widget."""
+"""Reaction Report View."""
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QTextEdit
-)
+from gui.views.report_view import ReportView
 
-class ReactionReport(QWidget):
-    """Reaction report window."""
+class ReactionReport(ReportView):
+    """View for displaying reaction report."""
     
     def __init__(self, project, parent=None):
-        super().__init__(parent)
-        self.project = project
-        self.setWindowTitle("Reaction Report")
-        self.resize(600, 400)
+        super().__init__(project, parent)
+        self.report_title = "Reaction Report"
+        self.setWindowTitle(self.report_title)
+        self.refresh()
         
-        self.setup_ui()
-        self.generate_report()
-        
-    def setup_ui(self):
-        """Setup UI components."""
-        layout = QVBoxLayout(self)
-        
-        self.text_edit = QTextEdit()
-        self.text_edit.setReadOnly(True)
-        self.text_edit.setFontFamily("Courier New") # Monospace for alignment
-        layout.addWidget(self.text_edit)
-        
-    def generate_report(self):
-        """Generate reaction report text."""
-        if not self.project.has_results():
-            self.text_edit.setText("No simulation results available.")
+    def refresh(self):
+        """Refresh report content."""
+        report_text = self.project.engine.report_text
+        if not report_text:
+            self.set_text("No simulation report available. Please run a simulation first.")
             return
             
-        results = self.project.engine.results
+        # Look for Reaction related sections
+        # "Reaction Info" or "Water Quality"
         
-        report = []
-        report.append("Reaction Report")
-        report.append("===============")
-        report.append("")
+        lines = report_text.splitlines()
+        reaction_lines = []
+        in_section = False
+        found = False
         
-        # Check for quality results
-        if 'quality' in results.node:
-            report.append("Water Quality Analysis")
-            report.append("-" * 30)
-            
-            # Average quality by node
-            avg_quality = results.node['quality'].mean()
-            report.append(f"Average Quality by Node:")
-            for node_id, val in avg_quality.items():
-                report.append(f"  Node {node_id}: {val:.4f}")
-            report.append("")
-            
-        if 'reaction_rate' in results.link:
-            report.append("Reaction Rates")
-            report.append("-" * 30)
-            
-            # Average reaction rate by link
-            avg_rate = results.link['reaction_rate'].mean()
-            report.append(f"Average Reaction Rate by Link:")
-            for link_id, val in avg_rate.items():
-                report.append(f"  Link {link_id}: {val:.4f}")
+        # Keywords to identify reaction section
+        keywords = ["Reaction", "Quality", "Source", "Mass Balance"]
+        
+        for line in lines:
+            # Check for section headers
+            if any(k in line for k in keywords) and "Page" not in line:
+                # Heuristic: Section headers often have dashes below them or are all caps
+                # For now, just simple keyword matching
+                # But we don't want every line with "Quality"
                 
-        if not report:
-            report.append("No reaction or quality data found in results.")
+                # EPANET Mass Balance usually starts with "Water Quality Mass Balance"
+                if "Water Quality Mass Balance" in line or "Reaction Reporting" in line:
+                    in_section = True
+                    found = True
             
-        self.text_edit.setText("\n".join(report))
+            if in_section:
+                reaction_lines.append(line)
+                # End of section?
+                # Usually blank lines separate sections.
+                # But tables have blank lines inside?
+                # Let's just grab the whole block until a new major section starts?
+                # Or just grab everything if we found the start.
+                
+        if found:
+            self.set_text("\n".join(reaction_lines))
+        else:
+            self.set_text("No reaction reporting found in the output. \nMake sure Water Quality is enabled and reactions are defined.")

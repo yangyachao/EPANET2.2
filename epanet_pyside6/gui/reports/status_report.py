@@ -1,47 +1,37 @@
-"""Status report widget."""
+"""Status Report View."""
 
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QTextEdit
-)
+from gui.views.report_view import ReportView
 
-class StatusReport(QWidget):
-    """Status report window."""
+class StatusReport(ReportView):
+    """View for displaying simulation status report."""
     
     def __init__(self, project, parent=None):
-        super().__init__(parent)
-        self.project = project
-        self.setWindowTitle("Status Report")
-        self.resize(600, 400)
+        super().__init__(project, parent)
+        self.report_title = "Status Report"
+        self.setWindowTitle(self.report_title)
+        self.refresh()
         
-        self.setup_ui()
-        self.load_report()
+    def refresh(self):
+        """Refresh report content."""
+        report_text = self.project.engine.report_text
+        if not report_text:
+            self.set_text("No simulation report available. Please run a simulation first.")
+            return
+            
+        # Extract Log section
+        # Usually from start to "Link Results:" or "Node Results:" or "Energy Usage:"
+        # Or just take the first N lines if we can't find sections?
+        # Better: Take everything until the first dashed line that is NOT part of the header?
         
-    def setup_ui(self):
-        """Setup UI components."""
-        layout = QVBoxLayout(self)
+        lines = report_text.splitlines()
+        log_lines = []
         
-        self.text_edit = QTextEdit()
-        self.text_edit.setReadOnly(True)
-        self.text_edit.setFontFamily("Courier New")
-        layout.addWidget(self.text_edit)
+        # Stop keywords
+        stop_keywords = ["Node Results", "Link Results", "Energy Usage", "Network Table"]
         
-    def load_report(self):
-        """Load status report from project."""
-        # Ideally, we get the report file content from the engine or a temporary file
-        # For now, let's assume the engine stores the last report path or content
-        
-        report_content = "No status report available."
-        
-        # Check if project has a report file path
-        if hasattr(self.project, 'report_file') and self.project.report_file:
-            try:
-                with open(self.project.report_file, 'r') as f:
-                    report_content = f.read()
-            except Exception as e:
-                report_content = f"Error reading report file: {e}"
-        elif hasattr(self.project, 'engine') and hasattr(self.project.engine, 'model'):
-             # WNTR might not keep the report file content in memory directly
-             # We might need to rely on where we saved the report during run_simulation
-             pass
-             
-        self.text_edit.setText(report_content)
+        for line in lines:
+            if any(k in line for k in stop_keywords):
+                break
+            log_lines.append(line)
+            
+        self.set_text("\n".join(log_lines))

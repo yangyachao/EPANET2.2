@@ -15,12 +15,14 @@ class Engine:
         """Initialize engine."""
         self.wn: Optional[wntr.network.WaterNetworkModel] = None
         self.results: Optional[wntr.sim.SimulationResults] = None
+        self.report_text: str = ""
     
     def open_project(self, filename: str):
         """Open an EPANET project file."""
         try:
             self.wn = wntr.network.WaterNetworkModel(filename)
             self.results = None
+            self.report_text = ""
         except Exception as e:
             # The error 'e' from wntr might contain detailed information.
             # We are wrapping it in a custom exception to be caught by the UI.
@@ -38,6 +40,7 @@ class Engine:
         """Close current project."""
         self.wn = None
         self.results = None
+        self.report_text = ""
         
     def run_simulation(self):
         """Run hydraulic and water quality simulation."""
@@ -56,7 +59,25 @@ class Engine:
             
             # Use EpanetSimulator
             sim = wntr.sim.EpanetSimulator(self.wn)
+            # WNTR's EpanetSimulator writes a file named 'temp.inp' and produces 'temp.rpt' usually
+            # We can specify a prefix or check the directory
             self.results = sim.run_sim()
+            
+            # Try to find the report file
+            # WNTR usually names it based on the input file name provided to run_sim, 
+            # or defaults to 'temp.rpt' if passing object.
+            # Let's check for any .rpt file
+            rpt_file = None
+            for f in os.listdir(temp_dir):
+                if f.endswith('.rpt'):
+                    rpt_file = f
+                    break
+            
+            if rpt_file:
+                with open(rpt_file, 'r') as f:
+                    self.report_text = f.read()
+            else:
+                self.report_text = "Report file not found."
             
         finally:
             # Always restore original working directory

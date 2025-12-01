@@ -456,24 +456,7 @@ class MainWindow(QMainWindow):
         
 
         
-        # Add Print to File Menu
-        # Insert before Exit (which is last)
-        self.file_menu.insertSeparator(self.exit_action)
-        
-        page_setup_action = QAction("Page &Setup...", self)
-        page_setup_action.triggered.connect(self.page_setup)
-        self.file_menu.insertAction(self.exit_action, page_setup_action)
-        
-        print_preview_action = QAction("Print Pre&view...", self)
-        print_preview_action.triggered.connect(self.print_preview)
-        self.file_menu.insertAction(self.exit_action, print_preview_action)
-        
-        print_action = QAction("&Print...", self)
-        print_action.setShortcut("Ctrl+P")
-        print_action.triggered.connect(self.print_map)
-        self.file_menu.insertAction(self.exit_action, print_action)
-        
-        self.file_menu.insertSeparator(self.exit_action)
+
     
     def window_menu_about_to_show(self):
         """Update window menu with list of open windows."""
@@ -585,30 +568,38 @@ class MainWindow(QMainWindow):
         """Show status report."""
         from gui.reports.status_report import StatusReport
         report = StatusReport(self.project)
-        report.show()
-        self.status_report = report
-        
+        subwindow = self.mdi_area.addSubWindow(report)
+        subwindow.showMaximized()
+
     def show_energy_report(self):
         """Show energy report."""
-        from gui.reports.energy_report import EnergyReport
-        report = EnergyReport(self.project)
-        report.show()
-        self.energy_report = report
+        from gui.views.energy_view import EnergyView
+        report = EnergyView(self.project)
+        subwindow = self.mdi_area.addSubWindow(report)
+        subwindow.setWindowTitle("Energy Report")
+        subwindow.showMaximized()
 
     def show_calibration_report(self):
         """Show calibration report."""
-        from gui.reports.calibration_report import CalibrationReport
-        report = CalibrationReport(self.project)
-        report.show()
-        # Keep reference to prevent garbage collection
-        self.calibration_report = report
-        
+        from gui.views.calibration_view import CalibrationView
+        report = CalibrationView(self.project)
+        subwindow = self.mdi_area.addSubWindow(report)
+        subwindow.setWindowTitle("Calibration Report")
+        subwindow.showMaximized()
+
     def show_reaction_report(self):
         """Show reaction report."""
         from gui.reports.reaction_report import ReactionReport
         report = ReactionReport(self.project)
-        report.show()
-        self.reaction_report = report
+        subwindow = self.mdi_area.addSubWindow(report)
+        subwindow.showMaximized()
+
+    def show_full_report(self):
+        """Show full report."""
+        from gui.reports.full_report import FullReport
+        report = FullReport(self.project)
+        subwindow = self.mdi_area.addSubWindow(report)
+        subwindow.showMaximized()
         
     def export_map(self):
         """Export map to image file."""
@@ -1327,24 +1318,43 @@ class MainWindow(QMainWindow):
         
         if dialog.exec():
             selection = dialog.get_selection()
+            graph_type = selection['graph_type']
             
-            if selection['graph_type'] == "Time Series":
-                if not selection['objects']:
+            if graph_type == "Contour":
+                # Redirect to ContourView
+                from gui.views import ContourView
+                contour_view = ContourView(self.project)
+                contour_view.set_parameter(selection['parameter'])
+                
+                subwindow = self.mdi_area.addSubWindow(contour_view)
+                subwindow.setWindowTitle(f"Contour - {selection['parameter'].name}")
+                subwindow.showMaximized()
+                
+            elif graph_type in ["Time Series", "Profile", "Frequency", "System Flow"]:
+                if graph_type == "Time Series" and not selection['objects']:
                     QMessageBox.warning(self, "Graph", "Please select at least one object.")
+                    return
+                elif graph_type == "Profile" and len(selection['objects']) < 2:
+                    QMessageBox.warning(self, "Graph", "Please select Start and End nodes.")
                     return
                     
                 graph_view = GraphView(self.project)
                 graph_view.set_data(
+                    graph_type,
                     selection['object_type'], 
                     selection['objects'], 
                     selection['parameter']
                 )
                 
+                title = f"{graph_type}"
+                if selection['parameter']:
+                    title += f" - {selection['parameter'].name}"
+                
                 subwindow = self.mdi_area.addSubWindow(graph_view)
-                subwindow.setWindowTitle(f"Graph - {selection['parameter'].name}")
+                subwindow.setWindowTitle(title)
                 subwindow.showMaximized()
             else:
-                QMessageBox.information(self, "Graph", f"{selection['graph_type']} not implemented yet.")
+                QMessageBox.information(self, "Graph", f"{graph_type} not implemented yet.")
         
     def create_table(self):
         """Create a new table window."""

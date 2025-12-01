@@ -57,26 +57,34 @@ class GraphView(QWidget):
         self.plot_widget.setLabel('bottom', 'Time (hours)')
         layout.addWidget(self.plot_widget)
         
-    def set_data(self, obj_type, obj_ids, param):
+    def set_data(self, graph_type, obj_type, obj_ids, param):
         """Set the data to plot."""
+        self.graph_type = graph_type
         self.object_type = obj_type
         self.object_ids = obj_ids if isinstance(obj_ids, list) else [obj_ids]
+        self.parameter = param
         
         # Update parameter combo
         self.param_combo.blockSignals(True)
         self.param_combo.clear()
         
-        if obj_type == 'Node':
-            for p in NodeParam:
-                self.param_combo.addItem(p.name, p)
-        elif obj_type == 'Link':
-            for p in LinkParam:
-                self.param_combo.addItem(p.name, p)
-                
-        # Select current parameter
-        index = self.param_combo.findData(param)
-        if index >= 0:
-            self.param_combo.setCurrentIndex(index)
+        if graph_type == "System Flow":
+            self.param_combo.addItem("System Flow", None)
+            self.param_combo.setEnabled(False)
+        else:
+            self.param_combo.setEnabled(True)
+            if obj_type == 'Node':
+                for p in NodeParam:
+                    self.param_combo.addItem(p.name, p)
+            elif obj_type == 'Link':
+                for p in LinkParam:
+                    self.param_combo.addItem(p.name, p)
+                    
+            # Select current parameter
+            if param:
+                index = self.param_combo.findData(param)
+                if index >= 0:
+                    self.param_combo.setCurrentIndex(index)
             
         self.param_combo.blockSignals(False)
         
@@ -99,31 +107,189 @@ class GraphView(QWidget):
             self.plot_widget.setTitle("No simulation results available")
             return
             
-        if not self.object_ids:
-            return
-            
-        param = self.param_combo.currentData()
-        if not param:
-            return
-            
         try:
-            # Color cycle for multiple lines
-            colors = ['b', 'r', 'g', 'c', 'm', 'y', 'k']
-            if not opts['white_background']:
-                colors = ['c', 'm', 'y', 'g', 'r', 'b', 'w'] # Brighter colors for dark bg
-            
-            width = opts['line_width']
-            
-            for i, obj_id in enumerate(self.object_ids):
-                times, values = self.project.get_time_series(self.object_type, obj_id, param)
-                color = colors[i % len(colors)]
-                self.plot_widget.plot(times, values, pen=pg.mkPen(color=color, width=width), name=f"{obj_id}")
-            
-            self.plot_widget.setTitle(f"{self.object_type} {param.name}")
-            self.plot_widget.setLabel('left', param.name)
-            
+            if self.graph_type == "Time Series":
+                self.plot_time_series()
+            elif self.graph_type == "Profile":
+                self.plot_profile()
+            elif self.graph_type == "Frequency":
+                self.plot_frequency()
+            elif self.graph_type == "System Flow":
+                self.plot_system_flow()
+            else:
+                self.plot_widget.setTitle(f"Unknown graph type: {self.graph_type}")
+                
         except Exception as e:
             self.plot_widget.setTitle(f"Error: {str(e)}")
+            print(f"Plot Error: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def get_pen(self, index):
+        """Get pen for plotting."""
+        colors = ['b', 'r', 'g', 'c', 'm', 'y', 'k']
+        if not self.graph_options['white_background']:
+            colors = ['c', 'm', 'y', 'g', 'r', 'b', 'w']
+        
+        color = colors[index % len(colors)]
+        width = self.graph_options['line_width']
+        return pg.mkPen(color=color, width=width)
+
+    def plot_time_series(self):
+        """Plot time series."""
+        if not self.object_ids: return
+        param = self.param_combo.currentData()
+        if not param: return
+        
+        self.plot_widget.setLabel('bottom', 'Time (hours)')
+        self.plot_widget.setLabel('left', param.name)
+        self.plot_widget.setTitle(f"{self.object_type} {param.name} - Time Series")
+        
+        for i, obj_id in enumerate(self.object_ids):
+            times, values = self.project.get_time_series(self.object_type, obj_id, param)
+            self.plot_widget.plot(times, values, pen=self.get_pen(i), name=f"{obj_id}")
+
+    def plot_profile(self):
+        """Plot profile along a path."""
+        if len(self.object_ids) < 2: return
+        start_node = self.object_ids[0]
+        end_node = self.object_ids[1]
+        param = self.param_combo.currentData()
+        if not param: return
+        
+        # Find path
+        import networkx as nx
+        G = self.project.network.graph
+        try:
+            path = nx.shortest_path(G, start_node, end_node)
+        except nx.NetworkXNoPath:
+            self.plot_widget.setTitle(f"No path between {start_node} and {end_node}")
+            return
+            
+        # Calculate distances and get values
+        distances = [0]
+        values = []
+        current_dist = 0
+        
+        # Get current time step from project/engine if possible, otherwise use 0
+        # For now, let's use time 0 or max? 
+        # Ideally we should get the time from MainWindow.
+        # But GraphView is standalone. Let's use the LAST time step for now, or 0.
+        # Better: Average? Or maybe we can't easily get "current" time without passing it in.
+        # Let's use the time step with maximum demand? Or just 0:00.
+        # Let's default to 0 for now.
+        t_idx = 0 
+        
+        # Get values for all nodes in path
+        results = self.project.engine.results
+        if not results: return
+        
+        # Map param to WNTR name
+        param_map = {
+            "ELEVATION": "elevation", "BASE_DEMAND": "base_demand", "DEMAND": "demand",
+            "HEAD": "head", "PRESSURE": "pressure", "QUALITY": "quality",
+            "INITIAL_QUALITY": "initial_quality"
+        }
+        wntr_param = param_map.get(param.name, param.name.lower())
+        
+        # Get node coordinates to calculate distance if link lengths not available?
+        # WNTR graph edges have 'weight' which is length usually?
+        # Let's calculate distance based on link lengths.
+        
+        node_res = results.node
+        if wntr_param not in node_res:
+            self.plot_widget.setTitle(f"Parameter {param.name} not found in results")
+            return
+            
+        # Get values at t_idx
+        # t_idx is index. times are in seconds.
+        times = node_res[wntr_param].index
+        t = times[t_idx]
+        
+        # Collect data
+        x = []
+        y = []
+        
+        for i, node in enumerate(path):
+            # Value
+            val = node_res[wntr_param].loc[t, node]
+            y.append(val)
+            
+            # Distance
+            if i > 0:
+                prev_node = path[i-1]
+                # Find link between prev_node and node
+                link = self.project.network.get_link(prev_node, node) # This might not exist directly if not checking direction?
+                # WNTR graph is undirected usually?
+                # Actually self.project.network.get_link might search.
+                # Let's try to get length from graph edge
+                if G.has_edge(prev_node, node):
+                    # Edge data might have length
+                    # But WNTR MultiDiGraph...
+                    # Let's just use coordinate distance if link length fails
+                    dist = 0
+                    # Try to find link object
+                    link_name = None
+                    # This is tricky in WNTR.
+                    # Let's assume straight line distance if we can't find link length
+                    n1 = self.project.network.nodes[prev_node]
+                    n2 = self.project.network.nodes[node]
+                    dx = n1.coordinates[0] - n2.coordinates[0]
+                    dy = n1.coordinates[1] - n2.coordinates[1]
+                    dist = (dx*dx + dy*dy)**0.5
+                    current_dist += dist
+            
+            x.append(current_dist)
+            
+        self.plot_widget.setLabel('bottom', 'Distance')
+        self.plot_widget.setLabel('left', param.name)
+        self.plot_widget.setTitle(f"Profile: {start_node} to {end_node} - {param.name}")
+        self.plot_widget.plot(x, y, pen=self.get_pen(0), symbol='o', name="Profile")
+
+    def plot_frequency(self):
+        """Plot cumulative frequency."""
+        if not self.object_ids: return
+        param = self.param_combo.currentData()
+        if not param: return
+        
+        # Collect all values for all selected objects over all times
+        all_values = []
+        
+        for obj_id in self.object_ids:
+            _, values = self.project.get_time_series(self.object_type, obj_id, param)
+            all_values.extend(values)
+            
+        if not all_values: return
+        
+        all_values.sort()
+        n = len(all_values)
+        y = [i/n * 100 for i in range(n)]
+        
+        self.plot_widget.setLabel('bottom', param.name)
+        self.plot_widget.setLabel('left', 'Cumulative Frequency (%)')
+        self.plot_widget.setTitle(f"Frequency Plot - {param.name}")
+        self.plot_widget.plot(all_values, y, pen=self.get_pen(0), name="Frequency")
+
+    def plot_system_flow(self):
+        """Plot system flow (Total Demand vs Time)."""
+        # Calculate total demand for all nodes at each time step
+        results = self.project.engine.results
+        if not results or 'demand' not in results.node: return
+        
+        demand = results.node['demand'] # DataFrame: index=time, columns=node_ids
+        # Sum across columns (axis=1)
+        total_demand = demand.sum(axis=1)
+        
+        times = total_demand.index / 3600.0 # Convert seconds to hours
+        values = total_demand.values
+        
+        self.plot_widget.setLabel('bottom', 'Time (hours)')
+        self.plot_widget.setLabel('left', 'Total Demand')
+        self.plot_widget.setTitle("System Flow Balance")
+        self.plot_widget.plot(times, values, pen=self.get_pen(0), name="Total Demand")
+        
+        # Could also add Total Production (Reservoirs + Tanks?)
+        # For now just Total Demand is a good start.
 
     def show_options(self):
         """Show graph options dialog."""

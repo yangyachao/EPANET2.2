@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt
 import pyqtgraph as pg
 import numpy as np
 from core.constants import NodeParam, LinkParam
+from core.units import get_unit_label
 
 class CalibrationView(QWidget):
     """Widget for calibration analysis."""
@@ -44,7 +45,6 @@ class CalibrationView(QWidget):
         self.id_input.setEditable(True)
         controls_layout.addRow("Object ID:", self.id_input)
         
-        self.value_input = QComboBox() # Reusing combo for simple text input look, but QLineEdit is better
         from PySide6.QtWidgets import QLineEdit
         self.value_input = QLineEdit()
         controls_layout.addRow("Observed Value:", self.value_input)
@@ -198,10 +198,18 @@ class CalibrationView(QWidget):
     def refresh_table(self):
         """Refresh table display."""
         self.table.setRowCount(len(self.observed_data))
+        
+        flow_units = self.project.network.options.flow_units
+        
         for i, data in enumerate(self.observed_data):
             self.table.setItem(i, 0, QTableWidgetItem(data['type']))
             self.table.setItem(i, 1, QTableWidgetItem(data['id']))
-            self.table.setItem(i, 2, QTableWidgetItem(data['param'].name))
+            
+            # Add unit to param name
+            unit_label = get_unit_label(data['param'].name.lower(), flow_units)
+            param_str = f"{data['param'].name} ({unit_label})" if unit_label else data['param'].name
+            
+            self.table.setItem(i, 2, QTableWidgetItem(param_str))
             self.table.setItem(i, 3, QTableWidgetItem(f"{data['value']:.2f}"))
             self.table.setItem(i, 4, QTableWidgetItem(f"{data['simulated']:.2f}"))
             
@@ -279,11 +287,16 @@ class CalibrationView(QWidget):
                 f.write(self.stats_label.text().replace('\n', '\n') + "\n\n")
                 
                 # Data Table
-                f.write(f"{'Type':<10} {'ID':<15} {'Parameter':<15} {'Observed':<15} {'Simulated':<15}\n")
-                f.write("-" * 70 + "\n")
+                f.write(f"{'Type':<10} {'ID':<15} {'Parameter':<25} {'Observed':<15} {'Simulated':<15}\n")
+                f.write("-" * 80 + "\n")
+                
+                flow_units = self.project.network.options.flow_units
                 
                 for data in self.observed_data:
-                    f.write(f"{data['type']:<10} {data['id']:<15} {data['param'].name:<15} {data['value']:<15.2f} {data['simulated']:<15.2f}\n")
+                    unit_label = get_unit_label(data['param'].name.lower(), flow_units)
+                    param_str = f"{data['param'].name} ({unit_label})" if unit_label else data['param'].name
+                    
+                    f.write(f"{data['type']:<10} {data['id']:<15} {param_str:<25} {data['value']:<15.2f} {data['simulated']:<15.2f}\n")
                     
             QMessageBox.information(self, "Export Successful", f"Report exported to:\n{filename}")
             

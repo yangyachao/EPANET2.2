@@ -7,6 +7,7 @@ from matplotlib.figure import Figure
 import matplotlib.tri as tri
 import numpy as np
 from core.constants import NodeParam, LinkParam
+from core.units import get_unit_label
 
 class ContourView(QWidget):
     """Widget for displaying contour plots of network data."""
@@ -195,9 +196,15 @@ class ContourView(QWidget):
             levels = np.linspace(min_val, max_val, 15)
             
             cntr = self.ax.tricontourf(triang, values, levels=levels, cmap="viridis")
-            self.figure.colorbar(cntr, ax=self.ax, label=param.name)
             
-            title = f"Network {param.name}"
+            # Get unit label
+            flow_units = self.project.network.options.flow_units
+            unit_label = get_unit_label(param.name.lower(), flow_units)
+            label_text = f"{param.name} ({unit_label})" if unit_label else param.name
+            
+            self.figure.colorbar(cntr, ax=self.ax, label=label_text)
+            
+            title = f"Network {label_text}"
             if has_results:
                 title += f" at {self.simulation_times[self.current_time_index]:.2f} hrs"
             self.ax.set_title(title)

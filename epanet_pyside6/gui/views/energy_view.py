@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 import pyqtgraph as pg
-
+from core.constants import FlowUnits
 
 class EnergyView(QWidget):
     """Widget for displaying pump energy analysis."""
@@ -32,10 +32,7 @@ class EnergyView(QWidget):
         
         self.table = QTableWidget()
         self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels([
-            "Pump", "Percent\nUtilization", "Average\nEfficiency", 
-            "Kw-hr\nper m³", "Average\nKwatts", "Peak\nKwatts", "Cost\nper day"
-        ])
+        # Headers will be set in refresh_data based on units
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.verticalHeader().setVisible(False)
         table_layout.addWidget(self.table)
@@ -53,9 +50,9 @@ class EnergyView(QWidget):
         self.radio_group = QButtonGroup()
         self.radio_utilization = QRadioButton("Percent Utilization")
         self.radio_efficiency = QRadioButton("Average Efficiency")
-        self.radio_kwhr = QRadioButton("Kw-hr per m³")
-        self.radio_avg_kw = QRadioButton("Average Kwatts")
-        self.radio_peak_kw = QRadioButton("Peak Kwatts")
+        self.radio_kwhr = QRadioButton("Kw-hr per m³") # Will update label
+        self.radio_avg_kw = QRadioButton("Average Kwatts") # Will update label
+        self.radio_peak_kw = QRadioButton("Peak Kwatts") # Will update label
         self.radio_cost = QRadioButton("Cost per day")
         
         self.radio_group.addButton(self.radio_utilization, 0)
@@ -97,8 +94,35 @@ class EnergyView(QWidget):
             return
         
         try:
+            # Determine units
+            flow_units = self.project.network.options.flow_units
+            is_si = flow_units in [
+                FlowUnits.LPS, FlowUnits.LPM, FlowUnits.MLD, 
+                FlowUnits.CMH, FlowUnits.CMD
+            ]
+            
+            # Set labels
+            vol_unit = "m³" if is_si else "Mgal"
+            power_unit = "kW" if is_si else "HP"
+            
+            kwhr_label = f"Kw-hr per {vol_unit}"
+            avg_power_label = f"Average {power_unit}"
+            peak_power_label = f"Peak {power_unit}"
+            
+            # Update Table Headers
+            self.table.setHorizontalHeaderLabels([
+                "Pump", "Percent\nUtilization", "Average\nEfficiency", 
+                kwhr_label.replace(" ", "\n"), avg_power_label.replace(" ", "\n"), 
+                peak_power_label.replace(" ", "\n"), "Cost\nper day"
+            ])
+            
+            # Update Radio Buttons
+            self.radio_kwhr.setText(kwhr_label)
+            self.radio_avg_kw.setText(avg_power_label)
+            self.radio_peak_kw.setText(peak_power_label)
+            
             # Get pump energy statistics
-            energy_stats = self._calculate_energy_stats()
+            energy_stats = self._calculate_energy_stats(is_si)
             
             if not energy_stats:
                 return
@@ -114,9 +138,9 @@ class EnergyView(QWidget):
                 self.table.setItem(i, 0, QTableWidgetItem(pump_id))
                 self.table.setItem(i, 1, QTableWidgetItem(f"{stats['utilization']:.2f}"))
                 self.table.setItem(i, 2, QTableWidgetItem(f"{stats['efficiency']:.2f}"))
-                self.table.setItem(i, 3, QTableWidgetItem(f"{stats['kwhr_per_m3']:.2f}"))
-                self.table.setItem(i, 4, QTableWidgetItem(f"{stats['avg_kw']:.2f}"))
-                self.table.setItem(i, 5, QTableWidgetItem(f"{stats['peak_kw']:.2f}"))
+                self.table.setItem(i, 3, QTableWidgetItem(f"{stats['kwhr_per_vol']:.2f}"))
+                self.table.setItem(i, 4, QTableWidgetItem(f"{stats['avg_power']:.2f}"))
+                self.table.setItem(i, 5, QTableWidgetItem(f"{stats['peak_power']:.2f}"))
                 self.table.setItem(i, 6, QTableWidgetItem(f"{stats['cost_per_day']:.2f}"))
                 
                 total_cost += stats['cost_per_day']
@@ -152,6 +176,7 @@ class EnergyView(QWidget):
             
             # Store stats for chart
             self.energy_stats = energy_stats
+            self.current_units = {'vol': vol_unit, 'power': power_unit}
             
             # Refresh chart
             self.refresh_chart()
@@ -161,7 +186,7 @@ class EnergyView(QWidget):
             import traceback
             traceback.print_exc()
     
-    def _calculate_energy_stats(self):
+    def _calculate_energy_stats(self, is_si):
         """Calculate energy statistics for all pumps."""
         try:
             wn = self.project.engine.wn
@@ -184,14 +209,14 @@ class EnergyView(QWidget):
             energy_stats = {}
             
             # Constants
-            GRAVITY = 9.81  # m/s²
-            WATER_DENSITY = 1000.0  # kg/m³
+            # US: HP = GPM * ft / 3960 / efficiency
+            # SI: kW = LPS * m * 9.81 / 1000 / efficiency (approx) or use rho*g*Q*H
             
             for pump_id in pumps:
                 try:
                     pump = wn.get_link(pump_id)
                     
-                    # Get flow rates (m³/s)
+                    # Get flow rates (Project Units)
                     if 'flowrate' not in results.link:
                         continue
                     flow_series = results.link['flowrate'].loc[:, pump_id]
@@ -200,13 +225,13 @@ class EnergyView(QWidget):
                     start_node = pump.start_node_name
                     end_node = pump.end_node_name
                     
-                    # Get heads at start and end nodes (m)
+                    # Get heads at start and end nodes (Project Units)
                     if 'head' not in results.node:
                         continue
                     head_start = results.node['head'].loc[:, start_node]
                     head_end = results.node['head'].loc[:, end_node]
                     
-                    # Calculate head gain (m)
+                    # Calculate head gain
                     head_gain = head_end - head_start
                     
                     # Get efficiency (use global efficiency)
@@ -214,31 +239,97 @@ class EnergyView(QWidget):
                     if efficiency <= 0:
                         efficiency = 0.75
                     
-                    # Calculate power (W) = (flow * head_gain * density * gravity) / efficiency
-                    # flow is in m³/s, head_gain in m
-                    power_series = (flow_series.abs() * head_gain * WATER_DENSITY * GRAVITY) / efficiency
+                    # Calculate Power
+                    if is_si:
+                        # Assuming Flow is in LPS (most common SI) or similar. 
+                        # Need to convert to m³/s for rho*g*Q*H
+                        # But wait, we need to know EXACT flow unit.
+                        flow_units = self.project.network.options.flow_units
+                        
+                        # Conversion to m³/s
+                        q_conv = 1.0
+                        if flow_units == FlowUnits.LPS: q_conv = 0.001
+                        elif flow_units == FlowUnits.LPM: q_conv = 1.6667e-5
+                        elif flow_units == FlowUnits.MLD: q_conv = 0.01157
+                        elif flow_units == FlowUnits.CMH: q_conv = 0.0002778
+                        elif flow_units == FlowUnits.CMD: q_conv = 1.157e-5
+                        
+                        # Power (kW) = (Q_m3s * H_m * 9810) / (1000 * efficiency)
+                        #            = (Q_m3s * H_m * 9.81) / efficiency
+                        power_series = (flow_series.abs() * q_conv * head_gain * 9.81) / efficiency
+                        
+                    else: # US Units
+                        # Assuming Flow in GPM, Head in ft
+                        # HP = (Q_gpm * H_ft) / (3960 * efficiency)
+                        # Need to handle other US units?
+                        flow_units = self.project.network.options.flow_units
+                        
+                        # Convert to GPM first if needed
+                        q_conv = 1.0
+                        if flow_units == FlowUnits.CFS: q_conv = 448.831
+                        elif flow_units == FlowUnits.MGD: q_conv = 694.444
+                        elif flow_units == FlowUnits.IMGD: q_conv = 833.333 # Imperial MGD -> US GPM? Or Imperial GPM?
+                        elif flow_units == FlowUnits.AFD: q_conv = 226.286
+                        
+                        # Calculate HP
+                        # Note: If flow is not GPM, we convert to GPM
+                        q_gpm = flow_series.abs() * q_conv
+                        power_series = (q_gpm * head_gain) / (3960.0 * efficiency)
                     
                     # Replace negative or NaN values with 0
                     power_series = power_series.fillna(0)
                     power_series[power_series < 0] = 0
                     
                     # Calculate statistics
-                    avg_power_w = power_series.mean()  # Watts
-                    peak_power_w = power_series.max()  # Watts
-                    avg_kw = avg_power_w / 1000.0
-                    peak_kw = peak_power_w / 1000.0
+                    avg_power = power_series.mean()
+                    peak_power = power_series.max()
                     
                     # Energy consumption (kWh)
-                    energy_kwh = (power_series.sum() * timestep_hours) / 1000.0
+                    # If SI: Power is kW. Energy = Sum(kW * dt)
+                    # If US: Power is HP. Convert to kW for energy. 1 HP = 0.7457 kW
+                    kw_conversion = 1.0 if is_si else 0.7457
+                    
+                    energy_kwh = (power_series.sum() * timestep_hours) * kw_conversion
                     
                     # Utilization (percentage of time pump was on)
                     utilization = (flow_series.abs() > 1e-6).sum() / len(flow_series) * 100.0
                     
-                    # Volume pumped (m³)
-                    volume_m3 = flow_series.abs().sum() * (times[1] - times[0])  # flow * timestep
+                    # Volume pumped
+                    # SI: m³
+                    # US: Mgal
                     
-                    # kWh per m³
-                    kwhr_per_m3 = energy_kwh / volume_m3 if volume_m3 > 1e-6 else 0.0
+                    if is_si:
+                        # Flow in Project Units. Convert to m³/s then * seconds -> m³
+                        # Reuse q_conv from above (to m³/s)
+                        flow_units = self.project.network.options.flow_units
+                        q_conv = 1.0
+                        if flow_units == FlowUnits.LPS: q_conv = 0.001
+                        elif flow_units == FlowUnits.LPM: q_conv = 1.6667e-5
+                        elif flow_units == FlowUnits.MLD: q_conv = 0.011574
+                        elif flow_units == FlowUnits.CMH: q_conv = 1.0/3600.0
+                        elif flow_units == FlowUnits.CMD: q_conv = 1.0/86400.0
+                        
+                        volume = flow_series.abs().sum() * q_conv * (times[1] - times[0]) # m³
+                        
+                    else:
+                        # US: Convert to Mgal
+                        # Flow in Project Units.
+                        flow_units = self.project.network.options.flow_units
+                        
+                        # Convert to GPM first
+                        q_conv_gpm = 1.0
+                        if flow_units == FlowUnits.CFS: q_conv_gpm = 448.831
+                        elif flow_units == FlowUnits.MGD: q_conv_gpm = 694.444
+                        elif flow_units == FlowUnits.AFD: q_conv_gpm = 226.286
+                        
+                        total_gallons = flow_series.abs().sum() * q_conv_gpm * (times[1] - times[0]) / 60.0 # GPM * min
+                        # Wait, timestep is seconds.
+                        # GPM * (dt_sec / 60) = Gallons
+                        
+                        volume = total_gallons / 1000000.0 # Mgal
+                    
+                    # kWh per Volume
+                    kwhr_per_vol = energy_kwh / volume if volume > 1e-6 else 0.0
                     
                     # Cost calculation
                     price_per_kwh = getattr(wn.options.energy, 'global_price', 0.0)
@@ -246,14 +337,15 @@ class EnergyView(QWidget):
                     
                     # Demand charge (based on peak kW)
                     demand_charge_rate = getattr(wn.options.energy, 'demand_charge', 0.0)
-                    demand_charge = peak_kw * demand_charge_rate
+                    peak_kw_val = peak_power if is_si else peak_power * 0.7457
+                    demand_charge = peak_kw_val * demand_charge_rate
                     
                     energy_stats[pump_id] = {
                         'utilization': utilization,
-                        'efficiency': efficiency * 100.0,  # Convert back to percentage
-                        'kwhr_per_m3': kwhr_per_m3,
-                        'avg_kw': avg_kw,
-                        'peak_kw': peak_kw,
+                        'efficiency': efficiency * 100.0,
+                        'kwhr_per_vol': kwhr_per_vol,
+                        'avg_power': avg_power,
+                        'peak_power': peak_power,
                         'cost_per_day': cost_per_day,
                         'demand_charge': demand_charge
                     }
@@ -281,10 +373,16 @@ class EnergyView(QWidget):
         
         # Get selected statistic
         selected_id = self.radio_group.checkedId()
-        stat_keys = ['utilization', 'efficiency', 'kwhr_per_m3', 'avg_kw', 'peak_kw', 'cost_per_day']
+        stat_keys = ['utilization', 'efficiency', 'kwhr_per_vol', 'avg_power', 'peak_power', 'cost_per_day']
+        
+        # Get labels from radio buttons
         stat_labels = [
-            "Percent Utilization", "Average Efficiency", "Kw-hr per m³",
-            "Average Kwatts", "Peak Kwatts", "Cost per day"
+            self.radio_utilization.text(),
+            self.radio_efficiency.text(),
+            self.radio_kwhr.text(),
+            self.radio_avg_kw.text(),
+            self.radio_peak_kw.text(),
+            self.radio_cost.text()
         ]
         
         if selected_id < 0 or selected_id >= len(stat_keys):

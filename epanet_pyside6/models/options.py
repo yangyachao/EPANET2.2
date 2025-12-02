@@ -18,6 +18,9 @@ class Options:
     accuracy: float = 0.001
     unbalanced: str = "STOP"
     unbalanced_continue: int = 10
+    checkfreq: int = 2
+    maxcheck: int = 10
+    damplimit: float = 0.0
     default_pattern: Optional[str] = None
     demand_multiplier: float = 1.0
     emitter_exponent: float = 0.5

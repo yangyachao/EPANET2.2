@@ -1094,10 +1094,6 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to import map:\n{str(e)}")
         
-    def import_scenario(self):
-        """Import scenario file."""
-        QMessageBox.information(self, "Not Implemented", "Import Scenario functionality is coming soon.")
-        
     def export_network(self):
         """Export network to INP file."""
         filename, _ = QFileDialog.getSaveFileName(
@@ -1221,9 +1217,47 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to export map:\n{str(e)}")
                 
+    def import_scenario(self):
+        """Import scenario from file."""
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Import Scenario", "", "EPANET Scenario (*.scn *.inp);;All Files (*)"
+        )
+        
+        if not filename:
+            return
+            
+        try:
+            from core.epanet_io import import_scenario
+            import_scenario(self.project, filename)
+            self.project.modified = True
+            self.browser_widget.refresh()
+            self.map_widget.refresh()
+            self.status_bar.showMessage(f"Scenario imported from {filename}")
+            QMessageBox.information(self, "Import Successful", "Scenario data imported successfully.")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Import Failed", f"Error importing scenario: {str(e)}")
+
     def export_scenario(self):
-        """Export scenario file."""
-        QMessageBox.information(self, "Not Implemented", "Export Scenario functionality is coming soon.")
+        """Export scenario to file."""
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Export Scenario", "", "EPANET Scenario (*.scn);;All Files (*)"
+        )
+        
+        if not filename:
+            return
+            
+        if not filename.endswith('.scn') and not filename.endswith('.inp'):
+            filename += '.scn'
+            
+        try:
+            from core.epanet_io import export_scenario
+            export_scenario(self.project, filename)
+            self.status_bar.showMessage(f"Scenario exported to {filename}")
+            QMessageBox.information(self, "Export Successful", f"Scenario exported to:\n{filename}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Export Failed", f"Error exporting scenario: {str(e)}")
     
     # Simulation
     
@@ -1537,11 +1571,7 @@ class MainWindow(QMainWindow):
         """Show project summary dialog."""
         from gui.dialogs.project_summary_dialog import ProjectSummaryDialog
         
-        # Get current title and notes
-        title = self.project.network.title
-        notes = self.project.network.notes
-        
-        dialog = ProjectSummaryDialog(self, title, notes)
+        dialog = ProjectSummaryDialog(self.project, self)
         if dialog.exec():
             data = dialog.get_data()
             self.project.network.title = data['title']
@@ -1658,10 +1688,25 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage("Preferences updated")
 
     def export_network(self):
-        """Show export network data dialog."""
-        from gui.dialogs.export_dialog import ExportDialog
-        dialog = ExportDialog(self.project, self)
-        dialog.exec()
+        """Export full network to INP file."""
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Export Network", "", "EPANET Input (*.inp);;All Files (*)"
+        )
+        
+        if not filename:
+            return
+            
+        if not filename.endswith('.inp'):
+            filename += '.inp'
+            
+        try:
+            from core.epanet_io import export_network
+            export_network(self.project, filename)
+            self.status_bar.showMessage(f"Network exported to {filename}")
+            QMessageBox.information(self, "Export Successful", f"Network exported to:\n{filename}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Export Failed", f"Error exporting network: {str(e)}")
         
     def export_map(self):
         """Show export map dialog."""
@@ -1669,11 +1714,7 @@ class MainWindow(QMainWindow):
         dialog = MapExportDialog(self.map_widget, self)
         dialog.exec()
         
-    def export_scenario(self):
-        """Export scenario (placeholder)."""
-        # TODO: Implement scenario export
-        QMessageBox.information(self, "Export Scenario", "Scenario export not implemented yet.")
-        
+
     def show_full_report(self):
         """Generate and show full report."""
         filepath, _ = QFileDialog.getSaveFileName(

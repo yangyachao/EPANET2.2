@@ -136,12 +136,18 @@ class GraphSelectionDialog(QDialog):
         # Trigger initial state update
         self.on_graph_type_changed(self.type_bg.checkedButton(), True)
         
+        # Explicitly update list for the initial type
+        self.update_list()
+        
         # Apply initial selection if Time Series
         if self.initial_type == "Time Series" and self.initial_selection:
             if self.initial_obj_type == "Link":
                 self.link_radio.setChecked(True)
             else:
                 self.node_radio.setChecked(True)
+            
+            # Re-update list after setting radio button
+            self.update_list()
                 
             for i in range(self.obj_list.count()):
                 item = self.obj_list.item(i)
@@ -156,7 +162,7 @@ class GraphSelectionDialog(QDialog):
         self.start_node_combo.addItems(nodes)
         self.end_node_combo.addItems(nodes)
         
-        # List is populated in on_object_type_changed
+        # List is populated in update_list called during initialization
         
     def on_graph_type_changed(self, button, checked):
         """Handle graph type change."""
@@ -173,6 +179,7 @@ class GraphSelectionDialog(QDialog):
         if graph_type == "Time Series":
             self.obj_list.setSelectionMode(QListWidget.MultiSelection)
             self.update_parameters()
+            self.update_list()
             
         elif graph_type == "Profile Plot":
             self.obj_type_group.setVisible(False) # Always Nodes for profile path? Or links? Usually nodes.
@@ -190,6 +197,7 @@ class GraphSelectionDialog(QDialog):
         elif graph_type == "Frequency Plot":
             self.obj_list.setSelectionMode(QListWidget.ExtendedSelection) # Allow selecting subset or all
             self.update_parameters()
+            self.update_list()
             
         elif graph_type == "System Flow":
             self.obj_type_group.setVisible(False)
@@ -245,8 +253,12 @@ class GraphSelectionDialog(QDialog):
             
         # Object Type
         obj_type = "Node"
-        if self.link_radio.isChecked() and self.obj_type_group.isVisible():
+        if self.link_radio.isChecked():
             obj_type = "Link"
+        # Force Node for Profile/Contour if needed, but the radio buttons are hidden so check state might be stale?
+        # Actually, if hidden, we should rely on what makes sense for the plot type.
+        if graph_type in ["Profile", "Contour"]:
+            obj_type = "Node"
         
         # Parameter
         param = self.param_combo.currentData()

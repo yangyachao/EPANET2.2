@@ -31,7 +31,7 @@ class PatternEditor(QDialog):
     def setup_ui(self):
         """Setup the user interface."""
         self.setWindowTitle("Pattern Editor")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(1000, 700)
         
         layout = QVBoxLayout(self)
         
@@ -55,8 +55,26 @@ class PatternEditor(QDialog):
         self.table = QTableWidget()
         self.table.setRowCount(2)
         self.table.setColumnCount(24)  # Default 24 periods
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.verticalHeader().setVisible(False)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.table.horizontalHeader().setDefaultSectionSize(50)
+        self.table.horizontalHeader().setVisible(False)
+        self.table.verticalHeader().setVisible(True)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.table.setFixedHeight(150)  # Increased height to ensure scrollbar visibility
+        # Force scrollbar style
+        self.table.setStyleSheet("""
+            QScrollBar:horizontal {
+                height: 15px;
+                background: #f0f0f0;
+            }
+            QScrollBar::handle:horizontal {
+                background: #cdcdcd;
+                min-width: 20px;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0px;
+            }
+        """)
         
         # Set row headers
         self.table.setVerticalHeaderLabels(["Time Period", "Multiplier"])
@@ -77,7 +95,7 @@ class PatternEditor(QDialog):
         
         self.chart_view = QChartView(self.chart)
         self.chart_view.setRenderHint(QPainter.Antialiasing)
-        self.chart_view.setMinimumHeight(200)
+        self.chart_view.setMinimumHeight(400)
         layout.addWidget(self.chart_view)
         
         # Buttons
@@ -165,6 +183,10 @@ class PatternEditor(QDialog):
         
     def plot_data(self):
         """Plot the pattern data on the chart."""
+        # Remove existing axes
+        for axis in self.chart.axes():
+            self.chart.removeAxis(axis)
+            
         self.chart.removeAllSeries()
         
         # Get multipliers from table

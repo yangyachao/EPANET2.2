@@ -73,3 +73,7 @@ class Curve:
     def __len__(self) -> int:
         """Get number of points in curve."""
         return len(self.points)
+
+    def __bool__(self) -> bool:
+        """Curve object is always True."""
+        return True

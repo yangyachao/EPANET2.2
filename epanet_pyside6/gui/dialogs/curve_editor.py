@@ -34,7 +34,7 @@ class CurveEditor(QDialog):
     def setup_ui(self):
         """Setup the user interface."""
         self.setWindowTitle("Curve Editor")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(1000, 700)
         
         layout = QVBoxLayout(self)
         
@@ -67,6 +67,20 @@ class CurveEditor(QDialog):
         self.table.setHorizontalHeaderLabels(["X", "Y"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.itemChanged.connect(self.on_table_changed)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.table.setStyleSheet("""
+            QScrollBar:vertical {
+                width: 15px;
+                background: #f0f0f0;
+            }
+            QScrollBar::handle:vertical {
+                background: #cdcdcd;
+                min-height: 20px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
         layout.addWidget(self.table)
         
         # Chart
@@ -76,7 +90,7 @@ class CurveEditor(QDialog):
         
         self.chart_view = QChartView(self.chart)
         self.chart_view.setRenderHint(QPainter.Antialiasing)
-        self.chart_view.setMinimumHeight(200)
+        self.chart_view.setMinimumHeight(400)
         layout.addWidget(self.chart_view)
         
         # Pump curve equation label
@@ -191,6 +205,10 @@ class CurveEditor(QDialog):
             
     def plot_data(self):
         """Plot the curve data on the chart."""
+        # Remove existing axes
+        for axis in self.chart.axes():
+            self.chart.removeAxis(axis)
+            
         self.chart.removeAllSeries()
         self.equation_label.setText("")
         

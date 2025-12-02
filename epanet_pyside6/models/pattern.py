@@ -49,3 +49,7 @@ class Pattern:
     def __len__(self) -> int:
         """Get number of multipliers in pattern."""
         return len(self.multipliers)
+
+    def __bool__(self) -> bool:
+        """Pattern object is always True."""
+        return True

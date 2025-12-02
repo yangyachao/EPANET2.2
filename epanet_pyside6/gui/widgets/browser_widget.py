@@ -12,6 +12,8 @@ class ProjectTree(QTreeWidget):
     """Tree widget for browsing network components (internal)."""
     objectActivated = Signal(str, str)
     objectSelected = Signal(str, str)
+    objectAdded = Signal(str)  # category
+    objectDeleted = Signal(str, str)  # obj_type, obj_id
     
     def __init__(self, project: EPANETProject):
         super().__init__()
@@ -28,33 +30,38 @@ class ProjectTree(QTreeWidget):
         
     def on_item_clicked(self, item, column):
         """Handle single-click on item."""
-        if item.parent() and item.parent().parent():
-            object_id = item.text(0)
+        # Check if it's an object
+        if item.parent():
             category_text = item.parent().text(0)
-            category = category_text.split(' (')[0] if ' (' in category_text else category_text
-            
+            category = category_text.split(' (')[0]
             obj_type = self._get_type_from_category(category)
-            if obj_type:
-                self.objectSelected.emit(obj_type, object_id)
-        elif item.parent() and not item.parent().parent():
-            # Category item
-            object_id = item.text(0)
-            category_text = item.parent().text(0)
-            category = category_text.split(' (')[0] if ' (' in category_text else category_text
             
-            if category in ("Patterns", "Curves"):
-                obj_type = 'Pattern' if category == "Patterns" else 'Curve'
+            if obj_type:
+                object_id = item.text(0)
                 self.objectSelected.emit(obj_type, object_id)
+                return
+
+        # Check if it's a category
+        category_text = item.text(0)
+        category = category_text.split(' (')[0]
+        if category in ("Patterns", "Curves"):
+            obj_type = 'Pattern' if category == "Patterns" else 'Curve'
+            # For category selection, we might want to emit something else or nothing
+            # The original code emitted objectSelected with the category name as ID?
+            # "object_id = item.text(0)" which is "Patterns (N)"
+            # Let's keep it simple: if it's a category, maybe we don't need to select an "object"
+            pass
 
     def on_item_double_clicked(self, item, column):
         """Handle double-click on item."""
-        if item.parent() and item.parent().parent():
-            object_id = item.text(0)
+        # Check if it's an object
+        if item.parent():
             category_text = item.parent().text(0)
-            category = category_text.split(' (')[0] if ' (' in category_text else category_text
-            
+            category = category_text.split(' (')[0]
             obj_type = self._get_type_from_category(category)
+            
             if obj_type:
+                object_id = item.text(0)
                 self.objectActivated.emit(obj_type, object_id)
                 
     def _get_type_from_category(self, category):
@@ -122,15 +129,42 @@ class ProjectTree(QTreeWidget):
         if not item: return
         
         menu = QMenu(self)
-        if item.parent() and item.parent().parent():
+        
+        # Check if it's an object (has a parent which is a category)
+        is_object = False
+        obj_type = None
+        object_id = None
+        
+        if item.parent():
+            category_text = item.parent().text(0)
+            category = category_text.split(' (')[0]
+            obj_type = self._get_type_from_category(category)
+            if obj_type:
+                is_object = True
+                object_id = item.text(0)
+        
+        if is_object:
             edit_action = menu.addAction("Edit Properties")
             delete_action = menu.addAction("Delete")
+            
             action = menu.exec_(self.mapToGlobal(position))
+            
             if action == edit_action:
                 self.on_item_double_clicked(item, 0)
+            elif action == delete_action:
+                self.objectDeleted.emit(obj_type, object_id)
+                
         else:
-            add_action = menu.addAction("Add New...")
-            menu.exec_(self.mapToGlobal(position))
+            # Check if it's a category that supports adding
+            category_text = item.text(0)
+            category = category_text.split(' (')[0]
+            
+            if category in ("Patterns", "Curves"):
+                add_action = menu.addAction("Add New...")
+                action = menu.exec_(self.mapToGlobal(position))
+                
+                if action == add_action:
+                    self.objectAdded.emit(category)
 
 
 class BrowserWidget(QTabWidget):
@@ -138,6 +172,8 @@ class BrowserWidget(QTabWidget):
     
     objectActivated = Signal(str, str)
     object_selected = Signal(str, str)
+    objectAdded = Signal(str)
+    objectDeleted = Signal(str, str)
     
     def __init__(self, project: EPANETProject, parent=None):
         super().__init__(parent)
@@ -147,6 +183,8 @@ class BrowserWidget(QTabWidget):
         self.tree = ProjectTree(project)
         self.tree.objectActivated.connect(self.objectActivated)
         self.tree.objectSelected.connect(self.object_selected)
+        self.tree.objectAdded.connect(self.objectAdded)
+        self.tree.objectDeleted.connect(self.objectDeleted)
         self.addTab(self.tree, "Data")
         
         # Map Tab

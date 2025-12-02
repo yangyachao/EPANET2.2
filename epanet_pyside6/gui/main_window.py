@@ -803,6 +803,10 @@ class MainWindow(QMainWindow):
         self.property_dock.setWidget(self.property_editor)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.property_dock)
         
+        # Connect browser add/delete signals
+        self.browser_widget.objectAdded.connect(self.on_object_added)
+        self.browser_widget.objectDeleted.connect(self.on_object_deleted)
+        
         # Overview Map Dock
         from gui.widgets.overview_map import OverviewMapWidget
         self.overview_dock = QDockWidget("Overview Map", self)
@@ -913,6 +917,71 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+
+    def on_object_added(self, category: str):
+        """Handle adding new object from browser."""
+        try:
+            if category == "Patterns":
+                # Generate unique ID
+                i = 1
+                while str(i) in self.project.network.patterns:
+                    i += 1
+                new_id = str(i)
+                
+                # Create new pattern
+                from models import Pattern
+                pattern = Pattern(new_id)
+                self.project.network.patterns[new_id] = pattern
+                
+                # Open editor
+                self.edit_pattern(new_id)
+                
+            elif category == "Curves":
+                # Generate unique ID
+                i = 1
+                while str(i) in self.project.network.curves:
+                    i += 1
+                new_id = str(i)
+                
+                # Create new curve
+                from models import Curve
+                curve = Curve(new_id)
+                self.project.network.curves[new_id] = curve
+                
+                # Open editor
+                self.edit_curve(new_id)
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to add new {category}:\n{str(e)}")
+
+    def on_object_deleted(self, obj_type: str, obj_id: str):
+        """Handle deleting object from browser."""
+        reply = QMessageBox.question(
+            self,
+            "Confirm Delete",
+            f"Are you sure you want to delete {obj_type} '{obj_id}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.No:
+            return
+            
+        try:
+            if obj_type == "Pattern":
+                if obj_id in self.project.network.patterns:
+                    del self.project.network.patterns[obj_id]
+            elif obj_type == "Curve":
+                if obj_id in self.project.network.curves:
+                    del self.project.network.curves[obj_id]
+            
+            # Mark modified and refresh
+            self.project.modified = True
+            self.browser_widget.refresh()
+            self.property_editor.set_object(None)
+            self.status_bar.showMessage(f"Deleted {obj_type} '{obj_id}'")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to delete {obj_type}:\n{str(e)}")
 
     def on_property_object_updated(self, obj):
         """Handle updates from property editor: refresh map visuals and browser if needed."""
@@ -1472,6 +1541,7 @@ class MainWindow(QMainWindow):
         from models import Pattern
         
         pattern = self.project.network.get_pattern(pattern_id)
+        
         if not pattern:
             QMessageBox.warning(self, "Pattern Not Found", f"Pattern '{pattern_id}' not found.")
             return
@@ -1512,6 +1582,7 @@ class MainWindow(QMainWindow):
         from models import Curve, CurveType
         
         curve = self.project.network.get_curve(curve_id)
+        
         if not curve:
             QMessageBox.warning(self, "Curve Not Found", f"Curve '{curve_id}' not found.")
             return

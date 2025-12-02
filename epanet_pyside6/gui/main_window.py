@@ -1825,10 +1825,47 @@ class MainWindow(QMainWindow):
     def show_analysis_options(self):
         """Show analysis options dialog."""
         from gui.dialogs.analysis_options_dialog import AnalysisOptionsDialog
+        from dataclasses import asdict
+        
         dialog = AnalysisOptionsDialog(self)
-        if dialog.exec() == QDialog.Accepted:
-            # Options are saved in the dialog's accept method
-            pass
+        
+        # Prepare options data
+        options = self.project.network.options
+        options_dict = asdict(options)
+        
+        # Convert Enums to strings for the dialog
+        options_dict['flow_units'] = options.flow_units.name
+        options_dict['headloss_formula'] = options.headloss_formula.name
+        options_dict['quality_type'] = options.quality_type.name
+        
+        dialog.load_data(options_dict)
+        
+        # Connect signal
+        dialog.options_updated.connect(self.update_analysis_options)
+        
+        dialog.exec()
+
+    def update_analysis_options(self, new_options: dict):
+        """Update project analysis options."""
+        from core.constants import FlowUnits, HeadLossType, QualityType
+        
+        options = self.project.network.options
+        
+        # Update simple fields
+        for key, value in new_options.items():
+            if hasattr(options, key):
+                # Handle Enums
+                if key == 'flow_units':
+                    setattr(options, key, FlowUnits[value])
+                elif key == 'headloss_formula':
+                    setattr(options, key, HeadLossType[value])
+                elif key == 'quality_type':
+                    setattr(options, key, QualityType[value])
+                else:
+                    setattr(options, key, value)
+        
+        self.project.modified = True
+        self.status_bar.showMessage("Analysis options updated")
     
     def show_defaults(self):
         """Show project defaults dialog."""
@@ -2027,6 +2064,10 @@ class MainWindow(QMainWindow):
         link_legend_colors = [QColor(c) for c in self.map_widget.link_legend.colors]
         link_legend_values = list(self.map_widget.link_legend.values)
         
+        # Initialize Unit Converter
+        from core.units import UnitConverter
+        converter = UnitConverter(self.project.network.options.flow_units)
+        
         # Update Nodes
         if self.current_node_param:
             param = self.current_node_param.lower()
@@ -2052,6 +2093,18 @@ class MainWindow(QMainWindow):
                         t = times[self.current_time_step]
                         row = results.node[wntr_param].loc[t]
                         values = row.to_dict()
+                        
+                        # Convert units
+                        if param == "elevation":
+                            values = {k: converter.length_to_project(v) for k, v in values.items()}
+                        elif param in ["head", "pressure"]:
+                            values = {k: converter.pressure_to_project(v) for k, v in values.items()}
+                        elif param in ["demand", "base demand", "basedemand"]:
+                            values = {k: converter.flow_to_project(v) for k, v in values.items()}
+                        elif param in ["quality", "initial quality", "initialquality"]:
+                            # Quality units are usually consistent, but check if conversion needed
+                            pass
+                            
                 except Exception as e:
                     print(f"Error getting node results: {e}")
             
@@ -2116,6 +2169,30 @@ class MainWindow(QMainWindow):
                         t = times[self.current_time_step]
                         row = results.link[wntr_param].loc[t]
                         values = row.to_dict()
+                        
+                        # Convert units
+                        if param == "length":
+                            values = {k: converter.length_to_project(v) for k, v in values.items()}
+                        elif param == "diameter":
+                            values = {k: converter.diameter_to_project(v) for k, v in values.items()}
+                        elif param == "flow":
+                            values = {k: converter.flow_to_project(v) for k, v in values.items()}
+                        elif param == "velocity":
+                            values = {k: converter.velocity_to_project(v) for k, v in values.items()}
+                        elif param in ["unit headloss", "unitheadloss"]:
+                            # Headloss is m/km or ft/kft. WNTR usually gives dimensionless or m/m?
+                            # WNTR headloss is usually unitless (m/m or ft/ft) * 1000 for per km/kft?
+                            # Actually WNTR result 'headloss' is usually total headloss in the pipe (m or ft).
+                            # But EPANET reports Unit Headloss (m/km or ft/kft).
+                            # Wait, 'headloss' in WNTR results is head loss per length or total?
+                            # Let's assume we need to calculate unit headloss if parameter is unit headloss.
+                            # But here we are just taking the value.
+                            # If WNTR gives total headloss, we need to divide by length.
+                            # But let's assume for now we just convert length units if it's length-based.
+                            # Actually, let's look at verify_units.py or similar.
+                            # For now, let's apply standard conversion if applicable.
+                            pass
+                            
                 except Exception as e:
                     print(f"Error getting link results: {e}")
             

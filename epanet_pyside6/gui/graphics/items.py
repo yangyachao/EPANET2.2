@@ -38,10 +38,10 @@ class NodeItem(QGraphicsEllipseItem):
         self.setToolTip(f"{node.id}\nElevation: {node.elevation}")
         
         # Add shadow effect for selected state
-        self.shadow = QGraphicsDropShadowEffect()
-        self.shadow.setBlurRadius(5) # Fixed pixel blur
-        self.shadow.setOffset(0, 0)
-        self.shadow.setColor(QColor(255, 0, 0, 200))
+        # self.shadow = QGraphicsDropShadowEffect()
+        # self.shadow.setBlurRadius(5) # Fixed pixel blur
+        # self.shadow.setOffset(0, 0)
+        # self.shadow.setColor(QColor(255, 0, 0, 200))
         
         # Text labels
         self.id_label = QGraphicsSimpleTextItem(self.node.id, self)
@@ -104,7 +104,7 @@ class NodeItem(QGraphicsEllipseItem):
                 pen = QPen(Qt.red, 2)
                 pen.setCosmetic(True)
                 self.setPen(pen)
-                self.setGraphicsEffect(self.shadow)
+                # self.setGraphicsEffect(self.shadow)
             else:
                 self.setBrush(QBrush(self.normal_color))
                 self.setPen(self.normal_pen)
@@ -126,7 +126,7 @@ class NodeItem(QGraphicsEllipseItem):
             effect.setBlurRadius(10)
             effect.setColor(QColor(0, 255, 255))
             effect.setOffset(0, 0)
-            self.setGraphicsEffect(effect)
+            # self.setGraphicsEffect(effect)
         else:
             # Restore state based on selection
             if self.isSelected():
@@ -263,7 +263,7 @@ class LinkItem(QGraphicsPathItem):
                 shadow.setBlurRadius(5)
                 shadow.setOffset(0, 0)
                 shadow.setColor(QColor(255, 0, 0, 220))
-                self.setGraphicsEffect(shadow)
+                # self.setGraphicsEffect(shadow)
                 
                 self.setZValue(10)
             else:

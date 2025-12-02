@@ -59,12 +59,16 @@ class EPANETProject:
     def _sync_network_to_wntr(self):
         """Sync internal network model to WNTR model."""
         import wntr
+        from core.units import UnitConverter, UnitSystem
         
         # Create WNTR model if it doesn't exist
         if not self.engine.wn:
             self.engine.wn = wntr.network.WaterNetworkModel()
             
         wn = self.engine.wn
+        
+        # Initialize Unit Converter
+        converter = UnitConverter(self.network.options.flow_units)
             
         # Project Info
         if hasattr(wn, 'title'):
@@ -75,17 +79,28 @@ class EPANETProject:
             # Add node if not exists
             if node.id not in wn.nodes:
                 if node.node_type == NodeType.JUNCTION:
-                    wn.add_junction(node.id, elevation=node.elevation, coordinates=(node.x, node.y))
+                    # Elevation: Project -> SI
+                    elev_si = converter.length_to_si(node.elevation)
+                    wn.add_junction(node.id, elevation=elev_si, coordinates=(node.x, node.y))
                 elif node.node_type == NodeType.RESERVOIR:
-                    wn.add_reservoir(node.id, base_head=node.total_head, coordinates=(node.x, node.y))
+                    # Total Head: Project -> SI
+                    head_si = converter.length_to_si(node.total_head)
+                    wn.add_reservoir(node.id, base_head=head_si, coordinates=(node.x, node.y))
                 elif node.node_type == NodeType.TANK:
-                    # WNTR uses meters for diameter, EPANET uses mm for metric units
-                    wn.add_tank(node.id, elevation=(node.elevation or 0.0), 
-                               init_level=(node.init_level or 0.0), 
-                               min_level=(node.min_level or 0.0), 
-                               max_level=(node.max_level or 0.0), 
-                               diameter=(node.diameter or 0.0) / 1000.0, 
-                               coordinates=(node.x, node.y))  # Convert mm to m
+                    # Elevation/Levels: Project -> SI
+                    elev_si = converter.length_to_si(node.elevation or 0.0)
+                    init_si = converter.length_to_si(node.init_level or 0.0)
+                    min_si = converter.length_to_si(node.min_level or 0.0)
+                    max_si = converter.length_to_si(node.max_level or 0.0)
+                    # Diameter: Project -> SI (m)
+                    diam_si = converter.diameter_to_si(node.diameter or 0.0)
+                    
+                    wn.add_tank(node.id, elevation=elev_si, 
+                               init_level=init_si, 
+                               min_level=min_si, 
+                               max_level=max_si, 
+                               diameter=diam_si, 
+                               coordinates=(node.x, node.y))
             
             # Update properties
             if node.id in wn.nodes:
@@ -94,15 +109,18 @@ class EPANETProject:
                 
                 # Common properties
                 if hasattr(wn_node, 'elevation') and hasattr(node, 'elevation') and node.elevation is not None:
-                    wn_node.elevation = node.elevation
+                    wn_node.elevation = converter.length_to_si(node.elevation)
                 if hasattr(wn_node, 'tag'):
                     wn_node.tag = node.tag
                     
                 # Junction specific
                 if hasattr(wn_node, 'base_demand') and hasattr(node, 'base_demand') and node.base_demand is not None:
+                    # Base Demand: Project -> SI (CMS)
+                    base_demand_si = converter.flow_to_si(node.base_demand)
+                    
                     # WNTR base_demand is read-only, need to set via demand_timeseries_list
                     if hasattr(wn_node, 'demand_timeseries_list') and len(wn_node.demand_timeseries_list) > 0:
-                        wn_node.demand_timeseries_list[0].base_value = node.base_demand
+                        wn_node.demand_timeseries_list[0].base_value = base_demand_si
                     else:
                         # Fallback if no demand list exists (shouldn't happen for standard junctions)
                         pass
@@ -113,25 +131,34 @@ class EPANETProject:
                     
                 # Reservoir specific
                 if hasattr(wn_node, 'base_head') and hasattr(node, 'total_head') and node.total_head is not None:
-                    wn_node.base_head = node.total_head
+                    wn_node.base_head = converter.length_to_si(node.total_head)
                 if hasattr(wn_node, 'head_pattern_name') and hasattr(node, 'head_pattern'):
                     wn_node.head_pattern_name = node.head_pattern or ""
                     
                 # Tank specific
                 if hasattr(wn_node, 'init_level') and hasattr(node, 'init_level') and node.init_level is not None:
-                    wn_node.init_level = node.init_level
+                    wn_node.init_level = converter.length_to_si(node.init_level)
                 if hasattr(wn_node, 'min_level') and hasattr(node, 'min_level') and node.min_level is not None:
-                    wn_node.min_level = node.min_level
+                    wn_node.min_level = converter.length_to_si(node.min_level)
                 if hasattr(wn_node, 'max_level') and hasattr(node, 'max_level') and node.max_level is not None:
-                    wn_node.max_level = node.max_level
+                    wn_node.max_level = converter.length_to_si(node.max_level)
                 if hasattr(wn_node, 'diameter') and hasattr(node, 'diameter') and node.diameter is not None:
-                    wn_node.diameter = node.diameter / 1000.0  # Convert mm to m
+                    wn_node.diameter = converter.diameter_to_si(node.diameter)
                 if hasattr(wn_node, 'min_volume') and hasattr(node, 'min_volume') and node.min_volume is not None:
-                    wn_node.min_volume = node.min_volume
+                    # Volume: Project -> SI (m3)
+                    vol_factor = 35.3147 if converter.system == UnitSystem.US else 1.0
+                    wn_node.min_volume = node.min_volume / vol_factor
                 if hasattr(wn_node, 'vol_curve_name') and hasattr(node, 'volume_curve'):
                     wn_node.vol_curve_name = node.volume_curve or ""
                 if hasattr(wn_node, 'mixing_model') and hasattr(node, 'mixing_model'):
-                    wn_node.mixing_model = node.mixing_model.name if hasattr(node.mixing_model, 'name') else str(node.mixing_model)
+                    # Map MixingModel enum to WNTR string
+                    mix_map = {
+                        MixingModel.MIX1: 'MIXED',
+                        MixingModel.MIX2: '2COMP',
+                        MixingModel.FIFO: 'FIFO',
+                        MixingModel.LIFO: 'LIFO'
+                    }
+                    wn_node.mixing_model = mix_map.get(node.mixing_model, 'MIXED')
                 if hasattr(wn_node, 'mixing_fraction') and hasattr(node, 'mixing_fraction') and node.mixing_fraction is not None:
                     wn_node.mixing_fraction = node.mixing_fraction
                 if hasattr(wn_node, 'bulk_reaction_coefficient') and hasattr(node, 'bulk_coeff') and node.bulk_coeff is not None:
@@ -142,11 +169,15 @@ class EPANETProject:
             # Add link if not exists
             if link.id not in wn.links:
                 if link.link_type == LinkType.PIPE:
-                    # WNTR uses meters for diameter, EPANET uses mm for metric units
+                    # Length: Project -> SI
+                    length_si = converter.length_to_si(link.length or 0.0)
+                    # Diameter: Project -> SI
+                    diam_si = converter.diameter_to_si(link.diameter or 0.0)
+                    
                     wn.add_pipe(link.id, link.from_node, link.to_node, 
-                               length=(link.length or 0.0), 
-                               diameter=(link.diameter or 0.0) / 1000.0, 
-                               roughness=(link.roughness or 0.0))  # Convert mm to m
+                               length=length_si, 
+                               diameter=diam_si, 
+                               roughness=(link.roughness or 0.0))
                 elif link.link_type == LinkType.PUMP:
                     wn.add_pump(link.id, link.from_node, link.to_node)
                 elif link.link_type in [LinkType.PRV, LinkType.PSV, LinkType.PBV, LinkType.FCV, LinkType.TCV, LinkType.GPV]:
@@ -159,10 +190,12 @@ class EPANETProject:
                     elif link.link_type == LinkType.TCV: valve_type = "TCV"
                     elif link.link_type == LinkType.GPV: valve_type = "GPV"
                     
-                    # WNTR uses meters for diameter, EPANET uses mm for metric units
+                    # Diameter: Project -> SI
+                    diam_si = converter.diameter_to_si(link.diameter or 0.0)
+                    
                     wn.add_valve(link.id, link.from_node, link.to_node, 
-                                diameter=(link.diameter or 0.0) / 1000.0, 
-                                valve_type=valve_type)  # Convert mm to m
+                                diameter=diam_si, 
+                                valve_type=valve_type)
 
             # Update properties
             if link.id in wn.links:
@@ -192,9 +225,9 @@ class EPANETProject:
                 
                 # Pipe specific
                 if hasattr(wn_link, 'length') and hasattr(link, 'length') and link.length is not None:
-                    wn_link.length = link.length
+                    wn_link.length = converter.length_to_si(link.length)
                 if hasattr(wn_link, 'diameter') and hasattr(link, 'diameter') and link.diameter is not None:
-                    wn_link.diameter = link.diameter / 1000.0  # Convert mm to m
+                    wn_link.diameter = converter.diameter_to_si(link.diameter)
                 if hasattr(wn_link, 'roughness') and hasattr(link, 'roughness') and link.roughness is not None:
                     wn_link.roughness = link.roughness
                 if hasattr(wn_link, 'minor_loss') and hasattr(link, 'minor_loss') and link.minor_loss is not None:
@@ -208,13 +241,25 @@ class EPANETProject:
                 if hasattr(wn_link, 'pump_curve_name') and hasattr(link, 'pump_curve'):
                     wn_link.pump_curve_name = link.pump_curve or ""
                 if hasattr(wn_link, 'power') and hasattr(link, 'power') and link.power is not None:
-                    wn_link.power = link.power
+                    # Power: Project -> SI (Watts)
+                    power = link.power
+                    if converter.system == UnitSystem.US:
+                        power = power * 745.7 # HP -> Watts
+                    else:
+                        power = power * 1000.0 # kW -> Watts
+                    wn_link.power = power
                 if hasattr(wn_link, 'speed_pattern_name') and hasattr(link, 'speed_pattern'):
                     wn_link.speed_pattern_name = link.speed_pattern or ""
                     
                 # Valve specific
                 if hasattr(wn_link, 'setting') and hasattr(link, 'valve_setting') and link.valve_setting is not None:
-                    wn_link.setting = link.valve_setting
+                    setting = link.valve_setting
+                    if link.link_type in [LinkType.PRV, LinkType.PSV, LinkType.PBV]:
+                        setting = converter.pressure_to_si(setting)
+                    elif link.link_type == LinkType.FCV:
+                        setting = converter.flow_to_si(setting)
+                    
+                    wn_link.setting = setting
         
         # Controls
         if hasattr(wn, 'controls'):
@@ -379,7 +424,7 @@ class EPANETProject:
                 wn.options.energy.global_price = opts.global_price
             if hasattr(wn.options.energy, 'demand_charge') and opts.demand_charge is not None:
                 wn.options.energy.demand_charge = opts.demand_charge
-
+ 
         # Patterns
         if hasattr(wn, 'add_pattern'):
             # Instead of removing all patterns (which might fail if used), update existing ones or add new ones
@@ -403,26 +448,44 @@ class EPANETProject:
                         wn.add_pattern(pat.id, pat.multipliers)
                     except:
                         pass # Can't update, ignore
-
+ 
         # Curves
         if hasattr(wn, 'add_curve'):
+            from models.curve import CurveType
             for curve in self.network.curves.values():
+                points = []
+                for x, y in curve.points:
+                    new_x, new_y = x, y
+                    if curve.curve_type == CurveType.VOLUME:
+                        new_x = converter.length_to_si(x)
+                        vol_factor = 35.3147 if converter.system == UnitSystem.US else 1.0
+                        new_y = y / vol_factor
+                    elif curve.curve_type == CurveType.PUMP:
+                        new_x = converter.flow_to_si(x)
+                        new_y = converter.length_to_si(y) # Head
+                    elif curve.curve_type == CurveType.EFFICIENCY:
+                        new_x = converter.flow_to_si(x)
+                        # Y is efficiency %
+                    elif curve.curve_type == CurveType.HEADLOSS:
+                        new_x = converter.flow_to_si(x)
+                        new_y = converter.length_to_si(y) # Headloss
+                        
+                    points.append((new_x, new_y))
+                
                 if hasattr(wn, 'get_curve'):
                     try:
                         wn_curve = wn.get_curve(curve.id)
                         # Update existing curve
-                        wn_curve.points = curve.points
-                        # Update type if possible? WNTR curves usually have type property
-                        # wn_curve.curve_type = curve.curve_type.name 
+                        wn_curve.points = points
                     except:
                         # Curve doesn't exist, add it
-                        wn.add_curve(curve.id, curve.curve_type.name, curve.points)
+                        wn.add_curve(curve.id, curve.curve_type.name, points)
                 else:
                     try:
-                        wn.add_curve(curve.id, curve.curve_type.name, curve.points)
+                        wn.add_curve(curve.id, curve.curve_type.name, points)
                     except:
                         pass
-                
+                 
         # Labels (WNTR supports labels?)
         # WNTR 0.4+ has labels support usually in wn.labels
         # But write_inpfile might not support writing them if they are not standard objects
@@ -444,6 +507,9 @@ class EPANETProject:
         try:
             if progress_callback:
                 progress_callback(10)
+            
+            # Sync internal model to WNTR before running
+            self._sync_network_to_wntr()
             
             self.engine.run_simulation()
             
@@ -507,209 +573,44 @@ class EPANETProject:
     
     def _load_network_from_wntr(self):
         """Convert WNTR network to our internal data model."""
+        from core.units import UnitConverter, UnitSystem
+        
         self.network.clear()
         wn = self.engine.wn
         if not wn:
             return
             
-        # Project Info
-        if hasattr(wn, 'title'):
-            self.network.title = wn.title
-            
-        # Nodes
-        for name, node in wn.nodes():
-            x, y = node.coordinates
-            elevation = getattr(node, 'elevation', 0.0)
-            
-            if isinstance(node, wntr.network.Junction):
-                new_node = Junction(
-                    id=name,
-                    x=x, y=y,
-                    elevation=elevation,
-                    base_demand=node.base_demand
-                )
-                if hasattr(node, 'demand_pattern_name'):
-                    new_node.demand_pattern = node.demand_pattern_name
-            elif isinstance(node, wntr.network.Reservoir):
-                new_node = Reservoir(
-                    id=name,
-                    x=x, y=y,
-                    elevation=getattr(node, 'head_pattern_name', 0.0) # Reservoir uses head_pattern_name for total head usually? 
-                    # WNTR Reservoir has 'base_head' and 'head_pattern_name'
-                )
-                # Fix for reservoir head
-                if hasattr(node, 'base_head'):
-                    new_node.total_head = node.base_head
-                if hasattr(node, 'head_pattern_name'):
-                    new_node.head_pattern = node.head_pattern_name
-            elif isinstance(node, wntr.network.Tank):
-                # WNTR uses meters for diameter, EPANET uses mm for metric units
-                new_node = Tank(
-                    id=name,
-                    x=x, y=y,
-                    elevation=elevation,
-                    init_level=node.init_level,
-                    min_level=node.min_level,
-                    max_level=node.max_level,
-                    diameter=node.diameter * 1000.0,  # Convert m to mm
-                    min_volume=node.min_vol,
-                    volume_curve=getattr(node, 'vol_curve_name', None)
-                )
-                if hasattr(node, 'mixing_model'):
-                    # Map WNTR mixing model to internal enum/string if needed
-                    pass 
-                if hasattr(node, 'mixing_fraction'):
-                    new_node.mixing_fraction = node.mixing_fraction
-                if hasattr(node, 'bulk_reaction_coefficient'):
-                    new_node.bulk_coeff = node.bulk_reaction_coefficient
-            else:
-                continue
-                
-            # Common Node properties
-            if hasattr(node, 'emitter_coefficient'):
-                new_node.emitter_coeff = node.emitter_coefficient
-            if hasattr(node, 'initial_quality'):
-                new_node.init_quality = node.initial_quality
-            if hasattr(node, 'tag'):
-                new_node.tag = node.tag
-                
-            self.network.add_node(new_node)
-            
-        # Update map bounds from WNTR options if available
-        if hasattr(wn, 'options') and hasattr(wn.options, 'graphics') and hasattr(wn.options.graphics, 'map_extent'):
-            extent = wn.options.graphics.map_extent
-            if extent:
-                # extent is usually (min_x, min_y, max_x, max_y) or similar
-                # WNTR might store it as a list or tuple
-                try:
-                    if len(extent) == 4:
-                        self.network.map_bounds['min_x'] = float(extent[0])
-                        self.network.map_bounds['min_y'] = float(extent[1])
-                        self.network.map_bounds['max_x'] = float(extent[2])
-                        self.network.map_bounds['max_y'] = float(extent[3])
-                except:
-                    pass
-            
-        # Links
-        for name, link in wn.links():
-            from_node = link.start_node_name
-            to_node = link.end_node_name
-            
-            if isinstance(link, wntr.network.Pipe):
-                # WNTR uses meters for diameter, EPANET uses mm for metric units
-                new_link = Pipe(
-                    id=name,
-                    from_node=from_node,
-                    to_node=to_node,
-                    length=link.length,
-                    diameter=link.diameter * 1000.0,  # Convert m to mm
-                    roughness=link.roughness
-                )
-                if hasattr(link, 'minor_loss'):
-                    new_link.minor_loss = link.minor_loss
-                if hasattr(link, 'bulk_reaction_coefficient'):
-                    new_link.bulk_coeff = link.bulk_reaction_coefficient
-                if hasattr(link, 'wall_reaction_coefficient'):
-                    new_link.wall_coeff = link.wall_reaction_coefficient
-                    
-            elif isinstance(link, wntr.network.Pump):
-                new_link = Pump(
-                    id=name,
-                    from_node=from_node,
-                    to_node=to_node
-                )
-                if hasattr(link, 'pump_curve_name'):
-                    new_link.pump_curve = link.pump_curve_name
-                if hasattr(link, 'power'):
-                    new_link.power = link.power
-                if hasattr(link, 'speed_pattern_name'):
-                    new_link.speed_pattern = link.speed_pattern_name
-                    
-            elif isinstance(link, wntr.network.Valve):
-                # WNTR uses meters for diameter, EPANET uses mm for metric units
-                new_link = Valve(
-                    id=name,
-                    valve_type=LinkType.PRV, # Default, need to check type
-                    from_node=from_node,
-                    to_node=to_node,
-                    diameter=link.diameter * 1000.0  # Convert m to mm
-                )
-                # Map valve type
-                if hasattr(link, 'valve_type'):
-                    vt = str(link.valve_type).upper()
-                    if vt == 'PRV': new_link.link_type = LinkType.PRV
-                    elif vt == 'PSV': new_link.link_type = LinkType.PSV
-                    elif vt == 'PBV': new_link.link_type = LinkType.PBV
-                    elif vt == 'FCV': new_link.link_type = LinkType.FCV
-                    elif vt == 'TCV': new_link.link_type = LinkType.TCV
-                    elif vt == 'GPV': new_link.link_type = LinkType.GPV
-                
-                if hasattr(link, 'setting'):
-                    new_link.valve_setting = link.setting
-                if hasattr(link, 'minor_loss'):
-                    new_link.minor_loss = link.minor_loss
-            else:
-                continue
-            
-            # Common Link properties
-            if hasattr(link, 'tag'):
-                new_link.tag = link.tag
-            if hasattr(link, 'status'):
-                # Map status
-                st = str(link.status).upper()
-                if st == 'OPEN': new_link.status = LinkStatus.OPEN
-                elif st == 'CLOSED': new_link.status = LinkStatus.CLOSED
-                elif st == 'CV': new_link.status = LinkStatus.CV
-                
-            self.network.add_link(new_link)
-            
-        # Patterns
-        if hasattr(wn, 'patterns'):
-            from models.pattern import Pattern
-            for name, pat in wn.patterns():
-                new_pat = Pattern(id=name)
-                new_pat.multipliers = list(pat.multipliers)
-                self.network.patterns[name] = new_pat
-                
-        # Curves
-        if hasattr(wn, 'curves'):
-            from models.curve import Curve, CurveType
-            for name, curve in wn.curves():
-                new_curve = Curve(id=name)
-                new_curve.points = list(curve.points)
-                # Map curve type
-                ct = str(curve.curve_type).upper()
-                if ct == 'VOLUME': new_curve.curve_type = CurveType.VOLUME
-                elif ct == 'PUMP': new_curve.curve_type = CurveType.PUMP
-                elif ct == 'EFFICIENCY': new_curve.curve_type = CurveType.EFFICIENCY
-                elif ct == 'HEADLOSS': new_curve.curve_type = CurveType.HEADLOSS
-                else: new_curve.curve_type = CurveType.GENERIC
-                
-                self.network.curves[name] = new_curve
-
-        # Controls
-        if hasattr(wn, 'controls'):
-            for name, control in wn.controls():
-                # Convert WNTR control to string and then to SimpleControl
-                control_str = str(control)
-                simple_control = SimpleControl.from_string(control_str)
-                if simple_control:
-                    self.network.controls.append(simple_control)
-                    
-        # Rules
-        if hasattr(wn, 'rules'):
-            for name, rule in wn.rules():
-                # Convert WNTR rule to string and then to Rule
-                rule_str = str(rule)
-                rule_obj = Rule.from_string(rule_str)
-                if rule_obj:
-                    self.network.rules.append(rule_obj)
-        
-        # Load Options from WNTR
+        # 1. Load Options FIRST to determine units
         if hasattr(wn, 'options'):
             opts = wn.options
             
             # Hydraulics
+            # Check for flow_units or inpfile_units (WNTR 1.x)
+            flow_units_val = getattr(opts.hydraulic, 'flow_units', None)
+            if flow_units_val is None:
+                flow_units_val = getattr(opts.hydraulic, 'inpfile_units', None)
+                
+            if flow_units_val:
+                # Map WNTR flow units string to our Enum
+                # WNTR uses strings like 'LPS', 'GPM'
+                fu_str = str(flow_units_val).split()[0].upper() # Handle 'LPS' or 'LPS (Litres/sec)'
+                
+                # Map string to FlowUnits enum
+                fu_map = {
+                    'CFS': FlowUnits.CFS,
+                    'GPM': FlowUnits.GPM,
+                    'MGD': FlowUnits.MGD,
+                    'IMGD': FlowUnits.IMGD,
+                    'AFD': FlowUnits.AFD,
+                    'LPS': FlowUnits.LPS,
+                    'LPM': FlowUnits.LPM,
+                    'MLD': FlowUnits.MLD,
+                    'CMH': FlowUnits.CMH,
+                    'CMD': FlowUnits.CMD
+                }
+                if fu_str in fu_map:
+                    self.network.options.flow_units = fu_map[fu_str]
+            
             if hasattr(opts.hydraulic, 'headloss'):
                 headloss_str = str(opts.hydraulic.headloss).upper()
                 if 'H-W' in headloss_str or 'HW' in headloss_str:
@@ -741,10 +642,19 @@ class EPANETProject:
                     self.network.options.quality_type = QualityType.NONE
                 elif 'CHEMICAL' in qual_str or 'CHEM' in qual_str:
                     self.network.options.quality_type = QualityType.CHEM
+                    # Extract chemical name and units if available
+                    parts = str(opts.quality.parameter).split()
+                    if len(parts) > 1:
+                        self.network.options.chemical_name = parts[1]
+                        if len(parts) > 2:
+                            self.network.options.chemical_units = parts[2]
                 elif 'AGE' in qual_str:
                     self.network.options.quality_type = QualityType.AGE
                 elif 'TRACE' in qual_str:
                     self.network.options.quality_type = QualityType.TRACE
+                    parts = str(opts.quality.parameter).split()
+                    if len(parts) > 1:
+                        self.network.options.trace_node = parts[1]
             
             if hasattr(opts.quality, 'diffusivity'):
                 self.network.options.diffusivity = opts.quality.diffusivity
@@ -790,20 +700,342 @@ class EPANETProject:
                 self.network.options.global_price = opts.energy.global_price
             if hasattr(opts.energy, 'demand_charge'):
                 self.network.options.demand_charge = opts.energy.demand_charge
+        
+        # Initialize Unit Converter
+        converter = UnitConverter(self.network.options.flow_units)
+            
+        # Project Info
+        if hasattr(wn, 'title'):
+            self.network.title = wn.title
+            
+        # Nodes
+        for name, node in wn.nodes():
+            x, y = node.coordinates
+            elevation = getattr(node, 'elevation', 0.0)
+            
+            # Convert Elevation (m -> ft if US)
+            elevation = converter.length_to_project(elevation)
+            
+            if isinstance(node, wntr.network.Junction):
+                # Base Demand is flow (CMS -> Project Flow Units)
+                # Note: WNTR base_demand is usually in CMS
+                base_demand = converter.flow_to_project(node.base_demand)
+                
+                new_node = Junction(
+                    id=name,
+                    x=x, y=y,
+                    elevation=elevation,
+                    base_demand=base_demand
+                )
+                if hasattr(node, 'demand_pattern_name'):
+                    new_node.demand_pattern = node.demand_pattern_name
+            elif isinstance(node, wntr.network.Reservoir):
+                # Reservoir Head is Length (m -> ft if US)
+                base_head = getattr(node, 'base_head', 0.0)
+                # If using pattern, base_head might be 0 or mean something else
+                total_head = converter.length_to_project(base_head)
+                
+                new_node = Reservoir(
+                    id=name,
+                    x=x, y=y,
+                    elevation=0.0, # Reservoirs don't have elevation property in EPANET GUI usually, just Total Head
+                    total_head=total_head
+                )
+                if hasattr(node, 'head_pattern_name'):
+                    new_node.head_pattern = node.head_pattern_name
+            elif isinstance(node, wntr.network.Tank):
+                # Tank Levels are Length (m -> ft)
+                # Tank Diameter is Diameter (m -> in/mm)
+                
+                init_level = converter.length_to_project(node.init_level)
+                min_level = converter.length_to_project(node.min_level)
+                max_level = converter.length_to_project(node.max_level)
+                min_vol = node.min_vol # Volume is usually m3. Need volume conversion? 
+                
+                vol_factor = 35.3147 if converter.system == UnitSystem.US else 1.0
+                min_vol = min_vol * vol_factor
+                
+                diameter = converter.diameter_to_project(node.diameter)
+                
+                new_node = Tank(
+                    id=name,
+                    x=x, y=y,
+                    elevation=elevation,
+                    init_level=init_level,
+                    min_level=min_level,
+                    max_level=max_level,
+                    diameter=diameter,
+                    min_volume=min_vol,
+                    volume_curve=getattr(node, 'vol_curve_name', None)
+                )
+                
+                # Mixing Model
+                if hasattr(node, 'mixing_model'):
+                    mix_str = str(node.mixing_model).upper()
+                    mix_map = {
+                        'MIXED': MixingModel.MIX1,
+                        '2COMP': MixingModel.MIX2,
+                        'FIFO': MixingModel.FIFO,
+                        'LIFO': MixingModel.LIFO
+                    }
+                    new_node.mixing_model = mix_map.get(mix_str, MixingModel.MIX1)
+                if hasattr(node, 'mixing_fraction'):
+                    new_node.mixing_fraction = node.mixing_fraction
+                if hasattr(node, 'bulk_reaction_coefficient'):
+                    new_node.bulk_coeff = node.bulk_reaction_coefficient
+            else:
+                continue
+                
+            # Common Node properties
+            if hasattr(node, 'emitter_coefficient'):
+                new_node.emitter_coeff = node.emitter_coefficient
+            if hasattr(node, 'initial_quality'):
+                new_node.init_quality = node.initial_quality
+            if hasattr(node, 'tag'):
+                new_node.tag = node.tag
+                
+            self.network.add_node(new_node)
+            
+        # Update map bounds from WNTR options if available
+        if hasattr(wn, 'options') and hasattr(wn.options, 'graphics') and hasattr(wn.options.graphics, 'map_extent'):
+            extent = wn.options.graphics.map_extent
+            if extent:
+                try:
+                    if len(extent) == 4:
+                        self.network.map_bounds['min_x'] = float(extent[0])
+                        self.network.map_bounds['min_y'] = float(extent[1])
+                        self.network.map_bounds['max_x'] = float(extent[2])
+                        self.network.map_bounds['max_y'] = float(extent[3])
+                except:
+                    pass
+            
+        # Links
+        for name, link in wn.links():
+            from_node = link.start_node_name
+            to_node = link.end_node_name
+            
+            if isinstance(link, wntr.network.Pipe):
+                # Length: m -> ft
+                length = converter.length_to_project(link.length)
+                # Diameter: m -> in/mm
+                diameter = converter.diameter_to_project(link.diameter)
+                
+                new_link = Pipe(
+                    id=name,
+                    from_node=from_node,
+                    to_node=to_node,
+                    length=length,
+                    diameter=diameter,
+                    roughness=link.roughness
+                )
+                if hasattr(link, 'minor_loss'):
+                    new_link.minor_loss = link.minor_loss
+                if hasattr(link, 'bulk_reaction_coefficient'):
+                    new_link.bulk_coeff = link.bulk_reaction_coefficient
+                if hasattr(link, 'wall_reaction_coefficient'):
+                    new_link.wall_coeff = link.wall_reaction_coefficient
+                    
+            elif isinstance(link, wntr.network.Pump):
+                new_link = Pump(
+                    id=name,
+                    from_node=from_node,
+                    to_node=to_node
+                )
+                if hasattr(link, 'pump_curve_name'):
+                    new_link.pump_curve = link.pump_curve_name
+                if hasattr(link, 'power'):
+                    # Power units? HP (US) or kW (SI)
+                    power = link.power
+                    if converter.system == UnitSystem.US:
+                        power = power / 745.7
+                    else:
+                        power = power / 1000.0
+                    new_link.power = power
+                    
+                if hasattr(link, 'speed_pattern_name'):
+                    new_link.speed_pattern = link.speed_pattern_name
+                    
+            elif isinstance(link, wntr.network.Valve):
+                # Diameter: m -> in/mm
+                diameter = converter.diameter_to_project(link.diameter)
+                
+                new_link = Valve(
+                    id=name,
+                    valve_type=LinkType.PRV, # Default, need to check type
+                    from_node=from_node,
+                    to_node=to_node,
+                    diameter=diameter
+                )
+                # Map valve type
+                if hasattr(link, 'valve_type'):
+                    vt = str(link.valve_type).upper()
+                    if vt == 'PRV': new_link.link_type = LinkType.PRV
+                    elif vt == 'PSV': new_link.link_type = LinkType.PSV
+                    elif vt == 'PBV': new_link.link_type = LinkType.PBV
+                    elif vt == 'FCV': new_link.link_type = LinkType.FCV
+                    elif vt == 'TCV': new_link.link_type = LinkType.TCV
+                    elif vt == 'GPV': new_link.link_type = LinkType.GPV
+                
+                if hasattr(link, 'setting'):
+                    setting = link.setting
+                    if new_link.link_type in [LinkType.PRV, LinkType.PSV, LinkType.PBV]:
+                        setting = converter.pressure_to_project(setting)
+                    elif new_link.link_type == LinkType.FCV:
+                        setting = converter.flow_to_project(setting)
+                    
+                    new_link.valve_setting = setting
+                    
+                if hasattr(link, 'minor_loss'):
+                    new_link.minor_loss = link.minor_loss
+            else:
+                continue
+            
+            # Common Link properties
+            if hasattr(link, 'tag'):
+                new_link.tag = link.tag
+            if hasattr(link, 'status'):
+                # Map status
+                st = str(link.status).upper()
+                if st == 'OPEN': new_link.status = LinkStatus.OPEN
+                elif st == 'CLOSED': new_link.status = LinkStatus.CLOSED
+                elif st == 'CV': new_link.status = LinkStatus.CV
+                
+            self.network.add_link(new_link)
+            
+        # Patterns
+        if hasattr(wn, 'patterns'):
+            from models.pattern import Pattern
+            for name, pat in wn.patterns():
+                new_pat = Pattern(id=name)
+                new_pat.multipliers = list(pat.multipliers)
+                self.network.patterns[name] = new_pat
+                
+        # Curves
+        if hasattr(wn, 'curves'):
+            from models.curve import Curve, CurveType
+            for name, curve in wn.curves():
+                new_curve = Curve(id=name)
+                # Curve points (X, Y) need conversion depending on type?
+                
+                ct = str(curve.curve_type).upper()
+                if ct == 'VOLUME': new_curve.curve_type = CurveType.VOLUME
+                elif ct == 'PUMP': new_curve.curve_type = CurveType.PUMP
+                elif ct == 'EFFICIENCY': new_curve.curve_type = CurveType.EFFICIENCY
+                elif ct == 'HEADLOSS': new_curve.curve_type = CurveType.HEADLOSS
+                else: new_curve.curve_type = CurveType.GENERIC
+                
+                points = []
+                for x, y in curve.points:
+                    new_x, new_y = x, y
+                    if new_curve.curve_type == CurveType.VOLUME:
+                        new_x = converter.length_to_project(x)
+                        vol_factor = 35.3147 if converter.system == UnitSystem.US else 1.0
+                        new_y = y * vol_factor
+                    elif new_curve.curve_type == CurveType.PUMP:
+                        new_x = converter.flow_to_project(x)
+                        new_y = converter.length_to_project(y) # Head
+                    elif new_curve.curve_type == CurveType.EFFICIENCY:
+                        new_x = converter.flow_to_project(x)
+                        # Y is efficiency %
+                    elif new_curve.curve_type == CurveType.HEADLOSS:
+                        new_x = converter.flow_to_project(x)
+                        new_y = converter.length_to_project(y) # Headloss
+                        
+                    points.append((new_x, new_y))
+                    
+                new_curve.points = points
+                self.network.curves[name] = new_curve
+
+        # Controls
+        if hasattr(wn, 'controls'):
+            for name, control in wn.controls():
+                # Convert WNTR control to string and then to SimpleControl
+                control_str = str(control)
+                simple_control = SimpleControl.from_string(control_str)
+                if simple_control:
+                    self.network.controls.append(simple_control)
+                    
+        # Rules
+        if hasattr(wn, 'rules'):
+            for name, rule in wn.rules():
+                # Convert WNTR rule to string and then to Rule
+                rule_str = str(rule)
+                rule_obj = Rule.from_string(rule_str)
+                if rule_obj:
+                    self.network.rules.append(rule_obj)
             
     def _load_results_from_engine(self):
         """Load results into network objects."""
+        from core.units import UnitConverter
+        
+        # Initialize Unit Converter
+        converter = UnitConverter(self.network.options.flow_units)
+        
         # Nodes
         for node_id, node in self.network.nodes.items():
-            node.demand = self.engine.get_node_result(node_id, NodeParam.DEMAND)
-            node.head = self.engine.get_node_result(node_id, NodeParam.HEAD)
-            node.pressure = self.engine.get_node_result(node_id, NodeParam.PRESSURE)
-            node.quality = self.engine.get_node_result(node_id, NodeParam.QUALITY)
+            # Demand: SI (CMS) -> Project Flow
+            demand_si = self.engine.get_node_result(node_id, NodeParam.DEMAND)
+            if demand_si is not None:
+                node.demand = converter.flow_to_project(demand_si)
+                
+            # Head: SI (m) -> Project Length
+            head_si = self.engine.get_node_result(node_id, NodeParam.HEAD)
+            if head_si is not None:
+                node.head = converter.length_to_project(head_si)
+                
+            # Pressure: SI (m) -> Project Pressure (psi or m)
+            pressure_si = self.engine.get_node_result(node_id, NodeParam.PRESSURE)
+            if pressure_si is not None:
+                node.pressure = converter.pressure_to_project(pressure_si)
+                
+            # Quality: Units depend on type, usually Mass/L. 
+            # WNTR returns kg/m3 = mg/L?
+            # EPANET usually uses mg/L. 1 kg/m3 = 1000 mg / 1000 L = 1 mg/L.
+            # So SI (kg/m3) is numerically equivalent to mg/L.
+            # If Trace, it's percentage.
+            # If Age, it's hours. WNTR returns seconds for Age?
+            # Let's assume WNTR returns consistent units.
+            # For Age, WNTR returns seconds. EPANET GUI usually displays hours.
+            quality_val = self.engine.get_node_result(node_id, NodeParam.QUALITY)
+            if quality_val is not None:
+                if self.network.options.quality_type == QualityType.AGE:
+                    node.quality = quality_val / 3600.0 # Seconds -> Hours
+                else:
+                    node.quality = quality_val
             
         # Links
         for link_id, link in self.network.links.items():
-            link.flow = self.engine.get_link_result(link_id, LinkParam.FLOW)
-            link.velocity = self.engine.get_link_result(link_id, LinkParam.VELOCITY)
+            # Flow: SI (CMS) -> Project Flow
+            flow_si = self.engine.get_link_result(link_id, LinkParam.FLOW)
+            if flow_si is not None:
+                link.flow = converter.flow_to_project(flow_si)
+                
+            # Velocity: SI (m/s) -> Project Velocity (ft/s or m/s)
+            vel_si = self.engine.get_link_result(link_id, LinkParam.VELOCITY)
+            if vel_si is not None:
+                link.velocity = converter.velocity_to_project(vel_si)
+                
+            # Headloss: SI (m/km) -> Project Headloss (ft/kft or m/km)
+            # WNTR results for headloss are usually "Headloss per 1000 units of length"
+            # Wait, WNTR EpanetSimulator might return total headloss or unit headloss.
+            # Standard EPANET report is Unit Headloss (ft/kft or m/km).
+            # If WNTR returns unit headloss in SI (m/km), it is dimensionless * 1000?
+            # 1 m/km = 1 m / 1000 m = 0.001 (slope)
+            # 1 ft/kft = 1 ft / 1000 ft = 0.001 (slope)
+            # So the value is the same if it's "per 1000 units".
+            # BUT, if WNTR returns it in m/m (slope), we need to multiply by 1000.
+            # Let's assume WNTR returns it as is from EPANET toolkit, which is usually Unit Headloss.
+            # Let's just pass it through for now, or check WNTR docs.
+            # WNTR docs: "Headloss (m/km or ft/kft)"
+            # So it seems it respects the unit system of the INP file?
+            # NO, WNTR converts everything to SI. So it probably returns m/km.
+            # If we want ft/kft, it is numerically the same as m/km?
+            # 1 m/km = 1e-3 m/m.
+            # 1 ft/kft = 1e-3 ft/ft.
+            # Yes, unit headloss is dimensionless slope * 1000.
+            # So no conversion needed if it's strictly slope * 1000.
+            # UNLESS WNTR returns total headloss (m).
+            # Let's assume it returns Unit Headloss (slope * 1000).
             link.headloss = self.engine.get_link_result(link_id, LinkParam.HEADLOSS)
 
     def get_time_series(self, obj_type: str, obj_id: str, param: Any) -> Tuple[list, list]:

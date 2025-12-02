@@ -3,6 +3,7 @@
 from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QPushButton, QHeaderView
 from PySide6.QtCore import Qt, Signal
 from core.project import EPANETProject
+from core.units import get_unit_label
 from gui.dialogs.demand_editor import DemandEditorDialog
 from gui.dialogs.source_editor import SourceEditorDialog
 
@@ -44,6 +45,13 @@ class PropertyEditor(QTableWidget):
         # Block signals while populating
         self.blockSignals(True)
         
+        # Get flow units for unit labels
+        flow_units = self.project.network.options.flow_units
+        
+        # Helper for unit labels
+        def u(param_type):
+            return f" ({get_unit_label(param_type, flow_units)})"
+        
         # Add properties based on object type
         from models import Junction, Reservoir, Tank, Pipe, Pump, Valve, Label
         
@@ -55,10 +63,10 @@ class PropertyEditor(QTableWidget):
             
         if isinstance(self.current_object, Junction):
             self.add_property("ID", self.current_object.id, editable=False)
-            self.add_property("X Coordinate", f"{(self.current_object.x or 0.0):.2f}")
-            self.add_property("Y Coordinate", f"{(self.current_object.y or 0.0):.2f}")
-            self.add_property("Elevation", f"{(self.current_object.elevation or 0.0):.2f}")
-            self.add_property("Base Demand", f"{(self.current_object.base_demand or 0.0):.2f}")
+            self.add_property(f"X Coordinate", f"{(self.current_object.x or 0.0):.2f}")
+            self.add_property(f"Y Coordinate", f"{(self.current_object.y or 0.0):.2f}")
+            self.add_property(f"Elevation{u('elevation')}", f"{(self.current_object.elevation or 0.0):.2f}")
+            self.add_property(f"Base Demand{u('flow')}", f"{(self.current_object.base_demand or 0.0):.2f}")
             self.add_property("Demand Pattern", self.current_object.demand_pattern or "")
             self.add_action_property("Demands", "...", self.edit_demands)
             self.add_property("Emitter Coeff.", f"{(self.current_object.emitter_coeff or 0.0):.2f}")
@@ -66,35 +74,35 @@ class PropertyEditor(QTableWidget):
             self.add_action_property("Source Quality", "...", self.edit_source_quality)
             
             if self.project.has_results():
-                self.add_property("Demand (Result)", f"{(self.current_object.demand or 0.0):.2f}", editable=False)
-                self.add_property("Head (Result)", f"{(self.current_object.head or 0.0):.2f}", editable=False)
-                self.add_property("Pressure (Result)", f"{(self.current_object.pressure or 0.0):.2f}", editable=False)
+                self.add_property(f"Demand (Result){u('flow')}", f"{(self.current_object.demand or 0.0):.2f}", editable=False)
+                self.add_property(f"Head (Result){u('head')}", f"{(self.current_object.head or 0.0):.2f}", editable=False)
+                self.add_property(f"Pressure (Result){u('pressure')}", f"{(self.current_object.pressure or 0.0):.2f}", editable=False)
                 self.add_property("Quality (Result)", f"{(self.current_object.quality or 0.0):.2f}", editable=False)
 
         elif isinstance(self.current_object, Reservoir):
             self.add_property("ID", self.current_object.id, editable=False)
             self.add_property("X Coordinate", f"{(self.current_object.x or 0.0):.2f}")
             self.add_property("Y Coordinate", f"{(self.current_object.y or 0.0):.2f}")
-            self.add_property("Total Head", f"{(self.current_object.total_head or 0.0):.2f}")
+            self.add_property(f"Total Head{u('head')}", f"{(self.current_object.total_head or 0.0):.2f}")
             self.add_property("Head Pattern", self.current_object.head_pattern or "")
             self.add_property("Initial Quality", f"{(self.current_object.init_quality or 0.0):.2f}")
             self.add_action_property("Source Quality", "...", self.edit_source_quality)
             
             if self.project.has_results():
-                self.add_property("Head (Result)", f"{(self.current_object.head or 0.0):.2f}", editable=False)
-                self.add_property("Pressure (Result)", f"{(self.current_object.pressure or 0.0):.2f}", editable=False)
+                self.add_property(f"Head (Result){u('head')}", f"{(self.current_object.head or 0.0):.2f}", editable=False)
+                self.add_property(f"Pressure (Result){u('pressure')}", f"{(self.current_object.pressure or 0.0):.2f}", editable=False)
                 self.add_property("Quality (Result)", f"{(self.current_object.quality or 0.0):.2f}", editable=False)
 
         elif isinstance(self.current_object, Tank):
             self.add_property("ID", self.current_object.id, editable=False)
             self.add_property("X Coordinate", f"{(self.current_object.x or 0.0):.2f}")
             self.add_property("Y Coordinate", f"{(self.current_object.y or 0.0):.2f}")
-            self.add_property("Elevation", f"{(self.current_object.elevation or 0.0):.2f}")
-            self.add_property("Initial Level", f"{(self.current_object.init_level or 0.0):.2f}")
-            self.add_property("Min Level", f"{(self.current_object.min_level or 0.0):.2f}")
-            self.add_property("Max Level", f"{(self.current_object.max_level or 0.0):.2f}")
-            self.add_property("Diameter", f"{(self.current_object.diameter or 0.0):.2f}")
-            self.add_property("Min Volume", f"{(self.current_object.min_volume or 0.0):.2f}")
+            self.add_property(f"Elevation{u('elevation')}", f"{(self.current_object.elevation or 0.0):.2f}")
+            self.add_property(f"Initial Level{u('length')}", f"{(self.current_object.init_level or 0.0):.2f}")
+            self.add_property(f"Min Level{u('length')}", f"{(self.current_object.min_level or 0.0):.2f}")
+            self.add_property(f"Max Level{u('length')}", f"{(self.current_object.max_level or 0.0):.2f}")
+            self.add_property(f"Diameter{u('diameter')}", f"{(self.current_object.diameter or 0.0):.2f}")
+            self.add_property(f"Min Volume{u('volume')}", f"{(self.current_object.min_volume or 0.0):.2f}")
             self.add_property("Volume Curve", self.current_object.volume_curve or "")
             self.add_property("Mixing Model", str(self.current_object.mixing_model.name))
             self.add_property("Mixing Fraction", f"{(self.current_object.mixing_fraction or 0.0):.2f}")
@@ -103,16 +111,16 @@ class PropertyEditor(QTableWidget):
             self.add_action_property("Source Quality", "...", self.edit_source_quality)
             
             if self.project.has_results():
-                self.add_property("Head (Result)", f"{(self.current_object.head or 0.0):.2f}", editable=False)
-                self.add_property("Pressure (Result)", f"{(self.current_object.pressure or 0.0):.2f}", editable=False)
+                self.add_property(f"Head (Result){u('head')}", f"{(self.current_object.head or 0.0):.2f}", editable=False)
+                self.add_property(f"Pressure (Result){u('pressure')}", f"{(self.current_object.pressure or 0.0):.2f}", editable=False)
                 self.add_property("Quality (Result)", f"{(self.current_object.quality or 0.0):.2f}", editable=False)
         
         elif isinstance(self.current_object, Pipe):
             self.add_property("ID", self.current_object.id, editable=False)
             self.add_property("From Node", self.current_object.from_node)
             self.add_property("To Node", self.current_object.to_node)
-            self.add_property("Length", f"{(self.current_object.length or 0.0):.2f}")
-            self.add_property("Diameter", f"{(self.current_object.diameter or 0.0):.2f}")
+            self.add_property(f"Length{u('length')}", f"{(self.current_object.length or 0.0):.2f}")
+            self.add_property(f"Diameter{u('diameter')}", f"{(self.current_object.diameter or 0.0):.2f}")
             self.add_property("Roughness", f"{(self.current_object.roughness or 0.0):.2f}")
             self.add_property("Loss Coeff.", f"{(self.current_object.minor_loss or 0.0):.2f}")
             self.add_property("Initial Status", str(self.current_object.status.name))
@@ -122,9 +130,9 @@ class PropertyEditor(QTableWidget):
             self.add_property("Check Valve", "Yes" if self.current_object.has_check_valve else "No")
             
             if self.project.has_results():
-                self.add_property("Flow (Result)", f"{(self.current_object.flow or 0.0):.2f}", editable=False)
-                self.add_property("Velocity (Result)", f"{(self.current_object.velocity or 0.0):.2f}", editable=False)
-                self.add_property("Headloss (Result)", f"{(self.current_object.headloss or 0.0):.2f}", editable=False)
+                self.add_property(f"Flow (Result){u('flow')}", f"{(self.current_object.flow or 0.0):.2f}", editable=False)
+                self.add_property(f"Velocity (Result){u('velocity')}", f"{(self.current_object.velocity or 0.0):.2f}", editable=False)
+                self.add_property(f"Headloss (Result){u('headloss')}", f"{(self.current_object.headloss or 0.0):.2f}", editable=False)
         
         elif isinstance(self.current_object, Pump):
             self.add_property("ID", self.current_object.id, editable=False)
@@ -140,23 +148,23 @@ class PropertyEditor(QTableWidget):
             self.add_property("Price Pattern", self.current_object.price_pattern or "")
             
             if self.project.has_results():
-                self.add_property("Flow (Result)", f"{(self.current_object.flow or 0.0):.2f}", editable=False)
-                self.add_property("Headloss (Result)", f"{(self.current_object.headloss or 0.0):.2f}", editable=False)
+                self.add_property(f"Flow (Result){u('flow')}", f"{(self.current_object.flow or 0.0):.2f}", editable=False)
+                self.add_property(f"Headloss (Result){u('headloss')}", f"{(self.current_object.headloss or 0.0):.2f}", editable=False)
 
         elif isinstance(self.current_object, Valve):
             self.add_property("ID", self.current_object.id, editable=False)
             self.add_property("Type", str(self.current_object.link_type.name), editable=False)
             self.add_property("From Node", self.current_object.from_node)
             self.add_property("To Node", self.current_object.to_node)
-            self.add_property("Diameter", f"{(self.current_object.diameter or 0.0):.2f}")
+            self.add_property(f"Diameter{u('diameter')}", f"{(self.current_object.diameter or 0.0):.2f}")
             self.add_property("Setting", f"{(self.current_object.valve_setting or 0.0):.2f}")
             self.add_property("Loss Coeff.", f"{(self.current_object.minor_loss or 0.0):.2f}")
             self.add_property("Fixed Status", str(self.current_object.fixed_status.name) if hasattr(self.current_object, 'fixed_status') else "OPEN")
             
             if self.project.has_results():
-                self.add_property("Flow (Result)", f"{(self.current_object.flow or 0.0):.2f}", editable=False)
-                self.add_property("Velocity (Result)", f"{(self.current_object.velocity or 0.0):.2f}", editable=False)
-                self.add_property("Headloss (Result)", f"{(self.current_object.headloss or 0.0):.2f}", editable=False)
+                self.add_property(f"Flow (Result){u('flow')}", f"{(self.current_object.flow or 0.0):.2f}", editable=False)
+                self.add_property(f"Velocity (Result){u('velocity')}", f"{(self.current_object.velocity or 0.0):.2f}", editable=False)
+                self.add_property(f"Headloss (Result){u('headloss')}", f"{(self.current_object.headloss or 0.0):.2f}", editable=False)
 
         elif isinstance(self.current_object, Label):
             self.add_property("Text", self.current_object.text)
@@ -207,6 +215,10 @@ class PropertyEditor(QTableWidget):
             return
         
         property_name = self.item(item.row(), 0).text()
+        # Remove unit label from property name for matching
+        # Assuming format "Name (Unit)"
+        clean_name = property_name.split(' (')[0]
+        
         new_value = item.text()
         
         # Update object property
@@ -214,117 +226,117 @@ class PropertyEditor(QTableWidget):
             from models import Junction, Reservoir, Tank, Pipe, Pump, Valve, Label
             
             # Common properties
-            if property_name == "Description":
+            if clean_name == "Description":
                 self.current_object.comment = new_value
-            elif property_name == "Tag":
+            elif clean_name == "Tag":
                 self.current_object.tag = new_value
             
             if isinstance(self.current_object, Junction):
-                if property_name == "X Coordinate":
+                if clean_name == "X Coordinate":
                     self.current_object.x = float(new_value)
-                elif property_name == "Y Coordinate":
+                elif clean_name == "Y Coordinate":
                     self.current_object.y = float(new_value)
-                elif property_name == "Elevation":
+                elif clean_name == "Elevation":
                     self.current_object.elevation = float(new_value)
-                elif property_name == "Base Demand":
+                elif clean_name == "Base Demand":
                     self.current_object.base_demand = float(new_value)
-                elif property_name == "Demand Pattern":
+                elif clean_name == "Demand Pattern":
                     self.current_object.demand_pattern = new_value
-                elif property_name == "Emitter Coeff.":
+                elif clean_name == "Emitter Coeff.":
                     self.current_object.emitter_coeff = float(new_value)
-                elif property_name == "Initial Quality":
+                elif clean_name == "Initial Quality":
                     self.current_object.init_quality = float(new_value)
                     
             elif isinstance(self.current_object, Reservoir):
-                if property_name == "X Coordinate":
+                if clean_name == "X Coordinate":
                     self.current_object.x = float(new_value)
-                elif property_name == "Y Coordinate":
+                elif clean_name == "Y Coordinate":
                     self.current_object.y = float(new_value)
-                elif property_name == "Total Head":
+                elif clean_name == "Total Head":
                     self.current_object.total_head = float(new_value)
-                elif property_name == "Head Pattern":
+                elif clean_name == "Head Pattern":
                     self.current_object.head_pattern = new_value
-                elif property_name == "Initial Quality":
+                elif clean_name == "Initial Quality":
                     self.current_object.init_quality = float(new_value)
                     
             elif isinstance(self.current_object, Tank):
-                if property_name == "X Coordinate":
+                if clean_name == "X Coordinate":
                     self.current_object.x = float(new_value)
-                elif property_name == "Y Coordinate":
+                elif clean_name == "Y Coordinate":
                     self.current_object.y = float(new_value)
-                elif property_name == "Elevation":
+                elif clean_name == "Elevation":
                     self.current_object.elevation = float(new_value)
-                elif property_name == "Initial Level":
+                elif clean_name == "Initial Level":
                     self.current_object.init_level = float(new_value)
-                elif property_name == "Min Level":
+                elif clean_name == "Min Level":
                     self.current_object.min_level = float(new_value)
-                elif property_name == "Max Level":
+                elif clean_name == "Max Level":
                     self.current_object.max_level = float(new_value)
-                elif property_name == "Diameter":
+                elif clean_name == "Diameter":
                     self.current_object.diameter = float(new_value)
-                elif property_name == "Min Volume":
+                elif clean_name == "Min Volume":
                     self.current_object.min_volume = float(new_value)
-                elif property_name == "Volume Curve":
+                elif clean_name == "Volume Curve":
                     self.current_object.volume_curve = new_value
-                elif property_name == "Mixing Fraction":
+                elif clean_name == "Mixing Fraction":
                     self.current_object.mixing_fraction = float(new_value)
-                elif property_name == "Reaction Coeff.":
+                elif clean_name == "Reaction Coeff.":
                     self.current_object.bulk_coeff = float(new_value)
-                elif property_name == "Initial Quality":
+                elif clean_name == "Initial Quality":
                     self.current_object.init_quality = float(new_value)
                     
             elif isinstance(self.current_object, Pipe):
-                if property_name == "Length":
+                if clean_name == "Length":
                     self.current_object.length = float(new_value)
-                elif property_name == "Diameter":
+                elif clean_name == "Diameter":
                     self.current_object.diameter = float(new_value)
-                elif property_name == "Roughness":
+                elif clean_name == "Roughness":
                     self.current_object.roughness = float(new_value)
-                elif property_name == "Loss Coeff.":
+                elif clean_name == "Loss Coeff.":
                     self.current_object.minor_loss = float(new_value)
-                elif property_name == "Bulk Coeff.":
+                elif clean_name == "Bulk Coeff.":
                     self.current_object.bulk_coeff = float(new_value)
-                elif property_name == "Wall Coeff.":
+                elif clean_name == "Wall Coeff.":
                     self.current_object.wall_coeff = float(new_value)
-                elif property_name == "Check Valve":
+                elif clean_name == "Check Valve":
                     self.current_object.has_check_valve = (new_value.lower() in ['yes', 'true', '1'])
                     
             elif isinstance(self.current_object, Pump):
-                if property_name == "Power":
+                if clean_name == "Power":
                     self.current_object.power = float(new_value)
-                elif property_name == "Speed":
+                elif clean_name == "Speed":
                     self.current_object.speed = float(new_value)
-                elif property_name == "Pump Curve":
+                elif clean_name == "Pump Curve":
                     self.current_object.pump_curve = new_value
-                elif property_name == "Pattern":
+                elif clean_name == "Pattern":
                     self.current_object.speed_pattern = new_value
-                elif property_name == "Efficiency Curve":
+                elif clean_name == "Efficiency Curve":
                     self.current_object.efficiency_curve = new_value
-                elif property_name == "Energy Price":
+                elif clean_name == "Energy Price":
                     self.current_object.energy_price = float(new_value)
-                elif property_name == "Price Pattern":
+                elif clean_name == "Price Pattern":
                     self.current_object.price_pattern = new_value
                     
             elif isinstance(self.current_object, Valve):
-                if property_name == "Diameter":
+                if clean_name == "Diameter":
                     self.current_object.diameter = float(new_value)
-                elif property_name == "Setting":
+                elif clean_name == "Setting":
                     self.current_object.valve_setting = float(new_value)
-                elif property_name == "Loss Coeff.":
+                elif clean_name == "Loss Coeff.":
                     self.current_object.minor_loss = float(new_value)
             
             elif isinstance(self.current_object, Label):
-                if property_name == "Text":
+                if clean_name == "Text":
                     self.current_object.text = new_value
-                elif property_name == "X Coordinate":
+                elif clean_name == "X Coordinate":
                     self.current_object.x = float(new_value)
-                elif property_name == "Y Coordinate":
+                elif clean_name == "Y Coordinate":
                     self.current_object.y = float(new_value)
-                elif property_name == "Font Size":
+                elif clean_name == "Font Size":
                     self.current_object.font_size = int(new_value)
-                elif property_name == "Font Bold":
+                elif clean_name == "Font Bold":
                     self.current_object.font_bold = (new_value.lower() in ['yes', 'true', '1'])
-                elif property_name == "Font Italic":
+                elif clean_name == "Font Italic":
                     self.current_object.font_italic = (new_value.lower() in ['yes', 'true', '1'])
             
             # Mark project as modified

@@ -1880,6 +1880,8 @@ class MainWindow(QMainWindow):
         def on_options_updated(new_options):
             self.project.map_options = new_options
             self.map_widget.scene.apply_map_options(new_options)
+            # Refresh map colors to show values if notation was enabled
+            self._update_map_colors(preserve_legend=True)
             self.status_bar.showMessage("Map options updated")
         
         dialog.options_updated.connect(on_options_updated)
@@ -1956,6 +1958,52 @@ class MainWindow(QMainWindow):
         self.current_time_step = time_step
         self._update_map_colors(preserve_legend=True)
         
+    def _get_units_for_param(self, param_name: str) -> str:
+        """Get unit string for a given parameter."""
+        from core.constants import FlowUnits
+        
+        param = param_name.lower()
+        flow_units = self.project.network.options.flow_units
+        
+        # Determine system (US or SI)
+        is_si = flow_units in [
+            FlowUnits.LPS, FlowUnits.LPM, FlowUnits.MLD, 
+            FlowUnits.CMH, FlowUnits.CMD
+        ]
+        
+        # Flow units map
+        flow_units_map = {
+            FlowUnits.CFS: "CFS",
+            FlowUnits.GPM: "GPM",
+            FlowUnits.MGD: "MGD",
+            FlowUnits.IMGD: "IMGD",
+            FlowUnits.AFD: "AFD",
+            FlowUnits.LPS: "LPS",
+            FlowUnits.LPM: "LPM",
+            FlowUnits.MLD: "MLD",
+            FlowUnits.CMH: "CMH",
+            FlowUnits.CMD: "CMD"
+        }
+        
+        if param in ["elevation", "head", "length"]:
+            return "m" if is_si else "ft"
+        elif param in ["diameter"]:
+            return "mm" if is_si else "in"
+        elif param in ["pressure"]:
+            return "m" if is_si else "psi"
+        elif param in ["velocity"]:
+            return "m/s" if is_si else "fps"
+        elif param in ["flow", "flowrate", "base demand", "basedemand", "demand"]:
+            return flow_units_map.get(flow_units, "")
+        elif param in ["headloss", "unit headloss", "unitheadloss"]:
+            return "m/km" if is_si else "ft/kft"
+        elif param in ["quality", "initial quality", "initialquality"]:
+            return self.project.network.options.chemical_units
+        elif param in ["friction factor", "frictionfactor", "reaction rate", "reactionrate", "source mass", "sourcemass"]:
+            return "" # Dimensionless or special
+        
+        return ""
+
     def _update_map_colors(self, preserve_legend=False):
         """Update map colors based on current parameters and time."""
         # Initialize current params if not set
@@ -2028,7 +2076,8 @@ class MainWindow(QMainWindow):
                         intervals = [min_val + i*step for i in range(5)]
                 
                 # Update Legend
-                self.map_widget.node_legend.set_data(self.current_node_param, "", intervals, colors)
+                units = self._get_units_for_param(self.current_node_param)
+                self.map_widget.node_legend.set_data(self.current_node_param, units, intervals, colors)
                 self.map_widget.node_legend.show()
                 
                 # Update Scene
@@ -2091,7 +2140,8 @@ class MainWindow(QMainWindow):
                         intervals = [min_val + i*step for i in range(5)]
                 
                 # Update Legend
-                self.map_widget.link_legend.set_data(self.current_link_param, "", intervals, colors)
+                units = self._get_units_for_param(self.current_link_param)
+                self.map_widget.link_legend.set_data(self.current_link_param, units, intervals, colors)
                 self.map_widget.link_legend.show()
                 
                 # Update Scene

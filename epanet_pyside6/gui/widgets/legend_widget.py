@@ -29,17 +29,18 @@ class LegendWidget(QWidget):
         
     def setup_ui(self):
         """Setup UI components."""
-        self.setMinimumWidth(150)
-        self.setMinimumHeight(200)
+        self.setMinimumWidth(130)
+        self.setMinimumHeight(160)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet("background-color: rgba(255, 255, 255, 200); border: 1px solid #ccc; border-radius: 5px;")
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(0)
         
         self.title_label = QLabel(self.title)
         self.title_label.setAlignment(Qt.AlignCenter)
-        self.title_label.setStyleSheet("font-weight: bold; border: none; background: transparent;")
+        self.title_label.setStyleSheet("font-weight: bold; border: none; background: transparent; font-size: 12px;")
         layout.addWidget(self.title_label)
         
         # Custom paint widget for gradient
@@ -53,7 +54,11 @@ class LegendWidget(QWidget):
         self.values = values
         self.colors = colors
         
-        self.title_label.setText(f"{parameter_name}\n({units})")
+        if units:
+            self.title_label.setText(f"{parameter_name}\n({units})")
+        else:
+            self.title_label.setText(f"{parameter_name}")
+            
         self.scale_widget.update()
         
     def set_visible(self, visible):
@@ -129,10 +134,10 @@ class LegendScale(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         
         rect = self.rect()
-        x = 10
-        y = 10
+        x = 5
+        y = 0
         w = 20
-        h = rect.height() - 20
+        h = rect.height() - 5
         
         # Draw color boxes
         num_intervals = len(self.parent_legend.colors)
@@ -140,6 +145,11 @@ class LegendScale(QWidget):
             return
             
         box_h = h / num_intervals
+        
+        # Font settings
+        font = painter.font()
+        font.setPointSize(11)
+        painter.setFont(font)
         
         for i, color in enumerate(self.parent_legend.colors):
             # Invert Y because index 0 is usually low value (bottom) but we draw top-down
@@ -158,13 +168,13 @@ class LegendScale(QWidget):
                 val = self.parent_legend.values[i]
                 text = f"{val:.2f}"
                 # Draw text aligned to the line between boxes
-                painter.drawText(x + w + 10, int(y_pos + box_h + 5), text)
+                painter.drawText(x + w + 5, int(y_pos + box_h + 4), text)
                 
         # Draw last value (top)
         if len(self.parent_legend.values) > len(self.parent_legend.colors):
              val = self.parent_legend.values[-1]
              text = f"{val:.2f}"
-             painter.drawText(x + w + 10, int(y + 5), text)
+             painter.drawText(x + w + 5, int(y + 4), text)
 
 
 

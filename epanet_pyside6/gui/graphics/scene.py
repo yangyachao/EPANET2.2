@@ -132,6 +132,10 @@ class NetworkScene(QGraphicsScene):
                 self.addItem(item)
                 
         self.update_scene_rect()
+        
+        # Apply map options if available
+        if hasattr(self.project, 'map_options'):
+            self.apply_map_options(self.project.map_options)
 
     def add_node(self, node_id):
         """Add a specific node to the scene."""

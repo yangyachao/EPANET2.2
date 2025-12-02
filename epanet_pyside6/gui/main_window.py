@@ -1880,36 +1880,10 @@ class MainWindow(QMainWindow):
         from gui.dialogs.map_options_dialog import MapOptionsDialog
         dialog = MapOptionsDialog(self)
         
-        # Initialize default options if not set
+        # Initialize default options if not set (legacy check, now in Project init)
         if not hasattr(self.project, 'map_options'):
-            self.project.map_options = {
-                'node_size': 3,
-                'size_nodes_by_value': False,
-                'display_node_border': True,
-                'display_junction_symbols': True,
-                'link_size': 2,
-                'size_links_by_value': False,
-                'display_link_border': False,
-                'arrow_style': 0,
-                'arrow_size': 5,
-                'display_labels': True,
-                'labels_transparent': False,
-                'label_zoom': 100,
-                'display_node_ids': False,
-                'display_node_values': False,
-                'display_link_ids': False,
-                'display_link_values': False,
-                'notation_transparent': False,
-                'notation_font_size': 8,
-                'notation_zoom': 100,
-                'display_tanks': True,
-                'display_pumps': True,
-                'display_valves': True,
-                'display_emitters': True,
-                'display_sources': True,
-                'symbol_zoom': 100,
-                'background_color': '#FFFFFF'
-            }
+             # Should be initialized in Project, but keep safe fallback just in case
+             pass
     
         dialog.load_options(self.project.map_options)
         

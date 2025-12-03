@@ -1,11 +1,13 @@
 """Property editor widget."""
 
-from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QPushButton, QHeaderView
+from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QPushButton, QHeaderView, QWidget, QHBoxLayout, QLineEdit, QToolButton
 from PySide6.QtCore import Qt, Signal
 from core.project import EPANETProject
 from core.units import get_unit_label
 from gui.dialogs.demand_editor import DemandEditorDialog
 from gui.dialogs.source_editor import SourceEditorDialog
+from gui.dialogs.curve_editor import CurveEditor
+from gui.dialogs.pattern_editor import PatternEditor
 
 
 class PropertyEditor(QTableWidget):
@@ -67,7 +69,7 @@ class PropertyEditor(QTableWidget):
             self.add_property(f"Y Coordinate", f"{(self.current_object.y or 0.0):.2f}")
             self.add_property(f"Elevation{u('elevation')}", f"{(self.current_object.elevation or 0.0):.2f}")
             self.add_property(f"Base Demand{u('flow')}", f"{(self.current_object.base_demand or 0.0):.2f}")
-            self.add_property("Demand Pattern", self.current_object.demand_pattern or "")
+            self.add_editable_action_property("Demand Pattern", self.current_object.demand_pattern or "", "...", lambda: self.edit_pattern("Demand Pattern"))
             self.add_action_property("Demands", "...", self.edit_demands)
             self.add_property("Emitter Coeff.", f"{(self.current_object.emitter_coeff or 0.0):.2f}")
             self.add_property("Initial Quality", f"{(self.current_object.init_quality or 0.0):.2f}")
@@ -84,7 +86,7 @@ class PropertyEditor(QTableWidget):
             self.add_property("X Coordinate", f"{(self.current_object.x or 0.0):.2f}")
             self.add_property("Y Coordinate", f"{(self.current_object.y or 0.0):.2f}")
             self.add_property(f"Total Head{u('head')}", f"{(self.current_object.total_head or 0.0):.2f}")
-            self.add_property("Head Pattern", self.current_object.head_pattern or "")
+            self.add_editable_action_property("Head Pattern", self.current_object.head_pattern or "", "...", lambda: self.edit_pattern("Head Pattern"))
             self.add_property("Initial Quality", f"{(self.current_object.init_quality or 0.0):.2f}")
             self.add_action_property("Source Quality", "...", self.edit_source_quality)
             
@@ -103,7 +105,7 @@ class PropertyEditor(QTableWidget):
             self.add_property(f"Max Level{u('length')}", f"{(self.current_object.max_level or 0.0):.2f}")
             self.add_property(f"Diameter{u('diameter')}", f"{(self.current_object.diameter or 0.0):.2f}")
             self.add_property(f"Min Volume{u('volume')}", f"{(self.current_object.min_volume or 0.0):.2f}")
-            self.add_property("Volume Curve", self.current_object.volume_curve or "")
+            self.add_editable_action_property("Volume Curve", self.current_object.volume_curve or "", "...", lambda: self.edit_curve("Volume Curve"))
             self.add_property("Mixing Model", str(self.current_object.mixing_model.name))
             self.add_property("Mixing Fraction", f"{(self.current_object.mixing_fraction or 0.0):.2f}")
             self.add_property("Reaction Coeff.", f"{(self.current_object.bulk_coeff or 0.0):.2f}")
@@ -138,14 +140,14 @@ class PropertyEditor(QTableWidget):
             self.add_property("ID", self.current_object.id, editable=False)
             self.add_property("From Node", self.current_object.from_node)
             self.add_property("To Node", self.current_object.to_node)
-            self.add_property("Pump Curve", self.current_object.pump_curve or "")
+            self.add_editable_action_property("Pump Curve", self.current_object.pump_curve or "", "...", lambda: self.edit_curve("Pump Curve"))
             self.add_property("Power", f"{(self.current_object.power or 0.0):.2f}")
             self.add_property("Speed", f"{(self.current_object.speed or 0.0):.2f}")
-            self.add_property("Pattern", self.current_object.speed_pattern or "")
+            self.add_editable_action_property("Pattern", self.current_object.speed_pattern or "", "...", lambda: self.edit_pattern("Pattern"))
             self.add_property("Initial Status", str(self.current_object.status.name))
-            self.add_property("Efficiency Curve", self.current_object.efficiency_curve or "")
+            self.add_editable_action_property("Efficiency Curve", self.current_object.efficiency_curve or "", "...", lambda: self.edit_curve("Efficiency Curve"))
             self.add_property("Energy Price", f"{(self.current_object.energy_price or 0.0):.4f}")
-            self.add_property("Price Pattern", self.current_object.price_pattern or "")
+            self.add_editable_action_property("Price Pattern", self.current_object.price_pattern or "", "...", lambda: self.edit_pattern("Price Pattern"))
             
             if self.project.has_results():
                 self.add_property(f"Flow (Result){u('flow')}", f"{(self.current_object.flow or 0.0):.2f}", editable=False)
@@ -205,9 +207,53 @@ class PropertyEditor(QTableWidget):
         self.setItem(row, 0, name_item)
         
         # Button
-        button = QPushButton(button_text)
         button.clicked.connect(callback)
         self.setCellWidget(row, 1, button)
+
+    def add_editable_action_property(self, name: str, value: str, button_text: str, callback):
+        """Add a property with an editable line edit and a button action."""
+        row = self.rowCount()
+        self.insertRow(row)
+        
+        # Property name
+        name_item = QTableWidgetItem(name)
+        name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+        self.setItem(row, 0, name_item)
+        
+        # Container widget
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Line Edit
+        line_edit = QLineEdit(value)
+        # Handle text changes manually since itemChanged won't fire
+        line_edit.editingFinished.connect(lambda: self.on_custom_widget_changed(row, line_edit.text()))
+        layout.addWidget(line_edit)
+        
+        # Button
+        button = QToolButton()
+        button.setText(button_text)
+        button.clicked.connect(callback)
+        layout.addWidget(button)
+        
+        self.setCellWidget(row, 1, widget)
+        
+    def on_custom_widget_changed(self, row, value):
+        """Handle changes from custom widgets."""
+        if not self.current_object:
+            return
+            
+        property_name = self.item(row, 0).text()
+        # Create a dummy item to reuse on_item_changed logic
+        # But on_item_changed expects item.column() == 1
+        # And it gets value from item.text()
+        # So we can't easily reuse it without refactoring.
+        # Let's just call the update logic directly or refactor.
+        
+        # Refactoring on_item_changed to update_property(name, value) is better.
+        self.update_property(property_name, value)
     
     def on_item_changed(self, item):
         """Handle property value change."""
@@ -215,11 +261,15 @@ class PropertyEditor(QTableWidget):
             return
         
         property_name = self.item(item.row(), 0).text()
+        new_value = item.text()
+        
+        self.update_property(property_name, new_value)
+        
+    def update_property(self, property_name, new_value):
+        """Update object property."""
         # Remove unit label from property name for matching
         # Assuming format "Name (Unit)"
         clean_name = property_name.split(' (')[0]
-        
-        new_value = item.text()
         
         # Update object property
         try:
@@ -387,5 +437,123 @@ class PropertyEditor(QTableWidget):
             self.current_object.source_quality = data['source_quality']
             self.current_object.source_pattern = data['source_pattern']
             
+            self.project.modified = True
+            self.populate_properties()
+
+    def edit_curve(self, property_name):
+        """Open curve editor."""
+        if not self.current_object:
+            return
+            
+        # Determine curve ID from property
+        curve_id = ""
+        curve_type = "Pump" # Default
+        
+        if property_name == "Volume Curve":
+            curve_id = self.current_object.volume_curve
+            curve_type = "Volume"
+        elif property_name == "Pump Curve":
+            curve_id = self.current_object.pump_curve
+            curve_type = "Pump"
+        elif property_name == "Efficiency Curve":
+            curve_id = self.current_object.efficiency_curve
+            curve_type = "Efficiency"
+             
+        # Get existing curve data
+        points = []
+        comment = ""
+        if curve_id:
+            curve = self.project.network.get_curve(curve_id)
+            if curve:
+                points = curve.points
+                comment = curve.comment
+                curve_type = curve.curve_type # Use existing type
+        
+        dialog = CurveEditor(self)
+        dialog.load_data(curve_id or "", curve_type, points, comment)
+        
+        if dialog.exec():
+            new_id, new_type, new_points, new_comment = dialog.unload_data()
+            
+            if not new_id:
+                return
+
+            # Update or create curve
+            from models import Curve
+            curve = self.project.network.get_curve(new_id)
+            if not curve:
+                curve = Curve(new_id)
+                self.project.network.add_curve(curve)
+            
+            curve.curve_type = new_type
+            curve.points = new_points
+            curve.comment = new_comment
+            
+            # Update object reference
+            if property_name == "Volume Curve":
+                self.current_object.volume_curve = new_id
+            elif property_name == "Pump Curve":
+                self.current_object.pump_curve = new_id
+            elif property_name == "Efficiency Curve":
+                self.current_object.efficiency_curve = new_id
+                
+            self.project.modified = True
+            self.populate_properties()
+            
+    def edit_pattern(self, property_name):
+        """Open pattern editor."""
+        if not self.current_object:
+            return
+            
+        # Determine pattern ID from property
+        pattern_id = ""
+        
+        if property_name == "Demand Pattern":
+            pattern_id = self.current_object.demand_pattern
+        elif property_name == "Head Pattern":
+            pattern_id = self.current_object.head_pattern
+        elif property_name == "Pattern": # Pump speed pattern
+            pattern_id = self.current_object.speed_pattern
+        elif property_name == "Price Pattern":
+            pattern_id = self.current_object.price_pattern
+            
+        # Get existing pattern data
+        multipliers = []
+        comment = ""
+        if pattern_id:
+            pattern = self.project.network.get_pattern(pattern_id)
+            if pattern:
+                multipliers = pattern.multipliers
+                comment = pattern.comment
+        
+        dialog = PatternEditor(self)
+        dialog.load_data(pattern_id or "", multipliers, comment)
+        
+        if dialog.exec():
+            new_id, new_multipliers, new_comment = dialog.unload_data()
+            
+            if not new_id:
+                return
+
+            # Update or create pattern
+            from models import Pattern
+            pattern = self.project.network.get_pattern(new_id)
+            if not pattern:
+                pattern = Pattern(new_id)
+                self.project.network.add_pattern(pattern)
+            
+            pattern.multipliers = new_multipliers
+            pattern.comment = new_comment
+            
+            # Update object reference
+            if property_name == "Demand Pattern":
+                self.current_object.demand_pattern = new_id
+            elif property_name == "Head Pattern":
+                self.current_object.head_pattern = new_id
+            elif property_name == "Pattern":
+                self.current_object.speed_pattern = new_id
+            elif property_name == "Price Pattern":
+                self.current_object.price_pattern = new_id
+                
             self.project.modified = True
             self.populate_properties()

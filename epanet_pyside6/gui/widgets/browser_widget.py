@@ -191,6 +191,40 @@ class BrowserWidget(QTabWidget):
         self.map_browser = MapBrowser(project)
         self.addTab(self.map_browser, "Map")
         
+        # Windows-style styling for cross-platform consistency
+        # Adjusted to prevent clipping on macOS
+        self.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #C4C4C3;
+                background: white;
+                top: -1px; 
+            }
+            QTabWidget::tab-bar {
+                left: 5px;
+            }
+            QTabBar::tab {
+                background: #F0F0F0;
+                border: 1px solid #C4C4C3;
+                min-width: 8ex;
+                padding: 4px 12px;
+                margin-right: -1px;
+                border-top-left-radius: 2px;
+                border-top-right-radius: 2px;
+            }
+            QTabBar::tab:selected {
+                background: #FFFFFF;
+                border-bottom-color: #FFFFFF; /* Blend with pane */
+                margin-bottom: -1px; /* Overlap pane border */
+            }
+            QTabBar::tab:!selected {
+                margin-top: 2px; /* Non-selected tabs are slightly shorter */
+                border-bottom-color: #C4C4C3;
+            }
+            QTabBar::tab:hover:!selected {
+                background: #E5F3FF; /* Light blue hover like Windows */
+            }
+        """)
+        
     def refresh(self):
         """Refresh the data tree."""
         self.tree.refresh()

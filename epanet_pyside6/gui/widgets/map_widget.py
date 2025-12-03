@@ -11,6 +11,7 @@ class MapWidget(QGraphicsView):
     """Interactive map widget."""
     
     options_requested = Signal() # Forward signal from legend
+    mouseMoved = Signal(float, float) # Emits x, y coordinates
     
     def __init__(self, project, parent=None):
         super().__init__(parent)
@@ -23,6 +24,7 @@ class MapWidget(QGraphicsView):
         self.setDragMode(QGraphicsView.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setMouseTracking(True)
         
         # Legends
         self.node_legend = LegendWidget("Node Legend", self)
@@ -192,6 +194,9 @@ class MapWidget(QGraphicsView):
 
     def mouseMoveEvent(self, event):
         pos = self.mapToScene(event.pos())
+        
+        # Emit logical coordinates (Y is flipped)
+        self.mouseMoved.emit(pos.x(), -pos.y())
         
         # Snapping logic for link drawing
         if 'pipe' in self.interaction_mode or 'pump' in self.interaction_mode or 'valve' in self.interaction_mode:

@@ -21,6 +21,15 @@ class EPANETProject:
         self._has_results = False
         self.last_report = "No simulation run yet."
         
+        # Default Properties and Prefixes
+        self.default_properties = {}
+        self.default_prefixes = {
+            'Junction': 'J', 'Reservoir': 'R', 'Tank': 'T',
+            'Pipe': 'P', 'Pump': 'PU', 'Valve': 'V',
+            'Pattern': 'PAT', 'Curve': 'C'
+        }
+        self.id_increment = 1
+
         # Default Map Options
         self.map_options = {
             'node_size': 3,

@@ -135,6 +135,7 @@ class MainWindow(QMainWindow):
         self.map_widget = MapWidget(self.project)
         self.map_widget.scene.selectionChanged.connect(self.on_map_selection_changed)
         self.map_widget.options_requested.connect(self.on_legend_updated)
+        self.map_widget.mouseMoved.connect(self.on_mouse_moved)
         self.map_subwindow = self.mdi_area.addSubWindow(self.map_widget)
         self.map_subwindow.setWindowTitle("Network Map")
         self.map_subwindow.showMaximized()
@@ -831,7 +832,46 @@ class MainWindow(QMainWindow):
         """Create status bar."""
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
+        
+        # Add permanent widgets
+        from PySide6.QtWidgets import QLabel
+        
+        self.auto_length_label = QLabel("Auto-Length: Off")
+        self.auto_length_label.setMinimumWidth(120)
+        self.status_bar.addPermanentWidget(self.auto_length_label)
+        
+        self.coord_label = QLabel("X, Y: 0.00, 0.00")
+        self.coord_label.setMinimumWidth(200)
+        self.status_bar.addPermanentWidget(self.coord_label)
+        
+        self.units_label = QLabel("GPM")
+        self.units_label.setMinimumWidth(50)
+        self.status_bar.addPermanentWidget(self.units_label)
+        
         self.status_bar.showMessage("Ready")
+        
+        # Initial update
+        self.update_status_bar()
+        
+    def update_status_bar(self):
+        """Update status bar information."""
+        if not hasattr(self, 'project') or not self.project:
+            return
+            
+        # Auto-Length
+        auto_length = self.project.default_properties.get('auto_length', 'Off')
+        self.auto_length_label.setText(f"Auto-Length: {auto_length}")
+        
+        # Units
+        from core.constants import FlowUnits
+        flow_units = self.project.network.options.flow_units
+        # Map enum to string if needed, or use name
+        unit_str = flow_units.name if hasattr(flow_units, 'name') else str(flow_units)
+        self.units_label.setText(unit_str)
+        
+    def on_mouse_moved(self, x, y):
+        """Handle mouse move from map widget."""
+        self.coord_label.setText(f"X, Y: {x:.2f}, {y:.2f}")
     
     def on_map_selection_changed(self, obj):
         """Handle selection changes in the map."""

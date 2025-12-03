@@ -323,6 +323,28 @@ class MapWidget(QGraphicsView):
         """Show context menu on right-click."""
         menu = QMenu(self)
         
+        # Check for item under mouse
+        item = self.scene.itemAt(self.mapToScene(event.pos()), self.transform())
+        
+        # Object Actions
+        if item and (hasattr(item, 'node') or hasattr(item, 'link') or hasattr(item, 'label')):
+            # Select it if not already selected
+            if not item.isSelected():
+                self.scene.clearSelection()
+                item.setSelected(True)
+                
+            props_action = menu.addAction("Properties")
+            props_action.triggered.connect(lambda: self.selectionChanged.emit(
+                item.node if hasattr(item, 'node') else 
+                item.link if hasattr(item, 'link') else 
+                item.label
+            ))
+            
+            delete_action = menu.addAction("Delete")
+            delete_action.triggered.connect(self.delete_selected_items)
+            
+            menu.addSeparator()
+            
         # Map Options action
         options_action = menu.addAction("⚙️ Map Options...")
         options_action.triggered.connect(self._show_map_options)

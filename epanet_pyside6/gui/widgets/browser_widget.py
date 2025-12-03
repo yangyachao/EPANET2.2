@@ -159,7 +159,7 @@ class ProjectTree(QTreeWidget):
             category_text = item.text(0)
             category = category_text.split(' (')[0]
             
-            if category in ("Patterns", "Curves"):
+            if category in ("Patterns", "Curves", "Simple Controls", "Rules"):
                 add_action = menu.addAction("Add New...")
                 action = menu.exec_(self.mapToGlobal(position))
                 

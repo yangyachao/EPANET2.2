@@ -135,7 +135,11 @@ class EPANETProject:
         try:
             # Sync network model back to WNTR object before saving
             self._sync_network_to_wntr()
-            self.engine.save_project(filename)
+            
+            # Use epanet_io.export_network to save, as it handles controls/rules
+            from core.epanet_io import export_network
+            export_network(self, filename)
+            
             self.filename = filename
             self.modified = False
         except Exception as e:
@@ -596,7 +600,32 @@ class EPANETProject:
             # Sync internal model to WNTR before running
             self._sync_network_to_wntr()
             
-            self.engine.run_simulation()
+            # Create a temporary INP file that INCLUDES controls/rules
+            # This is necessary because _sync_network_to_wntr doesn't fully populate WNTR controls
+            import tempfile
+            import os
+            from core.epanet_io import export_network
+            
+            fd, temp_inp = tempfile.mkstemp(suffix='.inp', prefix='epanet_run_')
+            os.close(fd)
+            
+            try:
+                export_network(self, temp_inp)
+                
+                # Load this temp INP into a new WNTR model
+                # This ensures WNTR has all controls/rules parsed correctly for the simulator
+                wn_sim = wntr.network.WaterNetworkModel(temp_inp)
+                
+                # Run simulation with this model
+                self.engine.run_simulation(wn=wn_sim)
+                
+            finally:
+                # Clean up temp file
+                if os.path.exists(temp_inp):
+                    try:
+                        os.remove(temp_inp)
+                    except:
+                        pass
             
             if progress_callback:
                 progress_callback(90)

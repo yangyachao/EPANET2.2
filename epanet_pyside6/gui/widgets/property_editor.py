@@ -207,6 +207,7 @@ class PropertyEditor(QTableWidget):
         self.setItem(row, 0, name_item)
         
         # Button
+        button = QPushButton(button_text)
         button.clicked.connect(callback)
         self.setCellWidget(row, 1, button)
 

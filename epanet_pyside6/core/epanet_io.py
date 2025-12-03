@@ -295,7 +295,46 @@ def export_network(project, filepath: str):
     
     if wn:
         try:
+            # Write base INP file using WNTR
             wntr.network.write_inpfile(wn, filepath)
+            
+            # Append Controls and Rules manually
+            # WNTR might not write them if they are not in the WNTR model
+            # So we append them from our internal model
+            
+            # Read the file back to insert before [END]
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Find [END]
+            end_tag = "[END]"
+            insert_pos = content.find(end_tag)
+            
+            new_content = ""
+            controls_text = ""
+            
+            # Controls
+            if project.network.controls:
+                controls_text += "\n[CONTROLS]\n"
+                for control in project.network.controls:
+                    controls_text += f"{control.to_string()}\n"
+                controls_text += "\n"
+            
+            # Rules
+            if project.network.rules:
+                controls_text += "\n[RULES]\n"
+                for rule in project.network.rules:
+                    controls_text += f"{rule.to_string()}\n"
+                controls_text += "\n"
+                
+            if insert_pos != -1:
+                new_content = content[:insert_pos] + controls_text + content[insert_pos:]
+            else:
+                new_content = content + controls_text + "\n[END]\n"
+                
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+                    
         except Exception as e:
             import traceback
             print("Error exporting network to INP:")

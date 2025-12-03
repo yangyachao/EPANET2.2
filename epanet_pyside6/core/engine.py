@@ -42,9 +42,15 @@ class Engine:
         self.results = None
         self.report_text = ""
         
-    def run_simulation(self):
-        """Run hydraulic and water quality simulation."""
-        if not self.wn:
+    def run_simulation(self, wn=None):
+        """Run hydraulic and water quality simulation.
+        
+        Args:
+            wn: Optional WNTR network model to run. If None, uses self.wn.
+        """
+        target_wn = wn if wn else self.wn
+        
+        if not target_wn:
             raise RuntimeError("No project opened")
         
         # Save current working directory
@@ -58,7 +64,7 @@ class Engine:
             os.chdir(temp_dir)
             
             # Use EpanetSimulator
-            sim = wntr.sim.EpanetSimulator(self.wn)
+            sim = wntr.sim.EpanetSimulator(target_wn)
             # WNTR's EpanetSimulator writes a file named 'temp.inp' and produces 'temp.rpt' usually
             # We can specify a prefix or check the directory
             self.results = sim.run_sim()

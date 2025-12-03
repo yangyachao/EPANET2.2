@@ -642,6 +642,15 @@ class MainWindow(QMainWindow):
         
         return QIcon(pixmap)
 
+    def load_icon(self, name):
+        """Load icon from resources."""
+        # Assuming resources are in ../resources/icons relative to this file
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        icon_path = os.path.join(base_dir, "resources", "icons", name)
+        if os.path.exists(icon_path):
+            return QIcon(icon_path)
+        return QIcon() # Return empty icon if not found
+
     def create_toolbars(self):
         """Create toolbars."""
         # Standard toolbar
@@ -652,50 +661,49 @@ class MainWindow(QMainWindow):
         
         # File Actions
         # New
-        new_action = QAction(self.create_icon_from_text("📄"), "New", self)
+        new_action = QAction(self.load_icon("new.svg"), "New", self)
         new_action.triggered.connect(self.new_project)
         self.std_toolbar.addAction(new_action)
         
         # Open
-        open_action = QAction(self.create_icon_from_text("📂"), "Open", self)
+        open_action = QAction(self.load_icon("open.svg"), "Open", self)
         open_action.triggered.connect(self.open_project)
         self.std_toolbar.addAction(open_action)
         
         # Save
-        save_action = QAction(self.create_icon_from_text("💾"), "Save", self)
+        save_action = QAction(self.load_icon("save.svg"), "Save", self)
         save_action.triggered.connect(self.save_project)
         self.std_toolbar.addAction(save_action)
         
         self.std_toolbar.addSeparator()
         
         # View modes
-        # Select (Arrow)
-        self.select_action.setIcon(self.create_icon_from_text("↖️"))
+        # Select
+        self.select_action.setIcon(self.load_icon("select.svg"))
         self.select_action.setText("Select")
         self.std_toolbar.addAction(self.select_action)
         
-        # Pan (Hand)
-        # Use a custom icon for Pan (Hand)
-        self.pan_action.setIcon(self.create_icon_from_text("✋"))
+        # Pan
+        self.pan_action.setIcon(self.load_icon("pan.svg"))
         self.pan_action.setText("Pan")
         self.std_toolbar.addAction(self.pan_action)
         
         self.std_toolbar.addSeparator()
         
         # Object Creation
-        self.add_junction_action = QAction(self.create_icon_from_text("○"), "Add Junction", self)
+        self.add_junction_action = QAction(self.load_icon("junction.svg"), "Add Junction", self)
         self.add_junction_action.setCheckable(True)
         self.add_junction_action.setToolTip("Add Junction")
         self.add_junction_action.triggered.connect(lambda: self.set_interaction_mode('add_junction'))
         self.std_toolbar.addAction(self.add_junction_action)
         
-        self.add_reservoir_action = QAction(self.create_icon_from_text("□"), "Add Reservoir", self)
+        self.add_reservoir_action = QAction(self.load_icon("reservoir.svg"), "Add Reservoir", self)
         self.add_reservoir_action.setCheckable(True)
         self.add_reservoir_action.setToolTip("Add Reservoir")
         self.add_reservoir_action.triggered.connect(lambda: self.set_interaction_mode('add_reservoir'))
         self.std_toolbar.addAction(self.add_reservoir_action)
         
-        self.add_tank_action = QAction(self.create_icon_from_text("⌸"), "Add Tank", self)
+        self.add_tank_action = QAction(self.load_icon("tank.svg"), "Add Tank", self)
         self.add_tank_action.setCheckable(True)
         self.add_tank_action.setToolTip("Add Tank")
         self.add_tank_action.triggered.connect(lambda: self.set_interaction_mode('add_tank'))
@@ -703,25 +711,25 @@ class MainWindow(QMainWindow):
         
         self.std_toolbar.addSeparator()
         
-        self.add_pipe_action = QAction(self.create_icon_from_text("—"), "Add Pipe", self)
+        self.add_pipe_action = QAction(self.load_icon("pipe.svg"), "Add Pipe", self)
         self.add_pipe_action.setCheckable(True)
         self.add_pipe_action.setToolTip("Add Pipe")
         self.add_pipe_action.triggered.connect(lambda: self.set_interaction_mode('add_pipe'))
         self.std_toolbar.addAction(self.add_pipe_action)
         
-        self.add_pump_action = QAction(self.create_icon_from_text("⏀"), "Add Pump", self)
+        self.add_pump_action = QAction(self.load_icon("pump.svg"), "Add Pump", self)
         self.add_pump_action.setCheckable(True)
         self.add_pump_action.setToolTip("Add Pump")
         self.add_pump_action.triggered.connect(lambda: self.set_interaction_mode('add_pump'))
         self.std_toolbar.addAction(self.add_pump_action)
         
-        self.add_valve_action = QAction(self.create_icon_from_text("⧖"), "Add Valve", self)
+        self.add_valve_action = QAction(self.load_icon("valve.svg"), "Add Valve", self)
         self.add_valve_action.setCheckable(True)
         self.add_valve_action.setToolTip("Add Valve")
         self.add_valve_action.triggered.connect(lambda: self.set_interaction_mode('add_valve'))
         self.std_toolbar.addAction(self.add_valve_action)
-
-        self.add_label_action = QAction(self.create_icon_from_text("🏷️"), "Add Label", self)
+        
+        self.add_label_action = QAction(self.load_icon("label.svg"), "Add Label", self)
         self.add_label_action.setCheckable(True)
         self.add_label_action.setToolTip("Add Label")
         self.add_label_action.triggered.connect(lambda: self.set_interaction_mode('add_label'))
@@ -730,23 +738,23 @@ class MainWindow(QMainWindow):
         self.std_toolbar.addSeparator()
         
         # Run
-        run_action = QAction(self.create_icon_from_text("▶️"), "Run", self)
+        run_action = QAction(self.load_icon("run.svg"), "Run", self)
         run_action.triggered.connect(self.run_simulation)
         self.std_toolbar.addAction(run_action)
         
         self.std_toolbar.addSeparator()
         
         # Reporting
-        graph_action = QAction(self.create_icon_from_text("📈"), "Graph", self)
+        graph_action = QAction(self.load_icon("graph.svg"), "Graph", self)
         graph_action.triggered.connect(self.create_graph)
         self.std_toolbar.addAction(graph_action)
         
-        table_action = QAction(self.create_icon_from_text("📋"), "Table", self)
+        table_action = QAction(self.load_icon("table.svg"), "Table", self)
         table_action.triggered.connect(self.create_table)
         self.std_toolbar.addAction(table_action)
         
-        # Others (keep text or find icons)
-        contour_action = QAction(self.create_icon_from_text("🗺️"), "Contour", self) 
+        # Others
+        contour_action = QAction(self.load_icon("contour.svg"), "Contour", self) 
         contour_action.triggered.connect(self.create_contour)
         self.std_toolbar.addAction(contour_action)
         
@@ -1911,9 +1919,9 @@ class MainWindow(QMainWindow):
         """Show project defaults dialog."""
         from gui.dialogs.defaults_dialog import DefaultsDialog
         dialog = DefaultsDialog(self.project, self)
-        if dialog.exec() == QDialog.Accepted:
+        if dialog.exec():
+            self.update_status_bar()
             # Defaults are saved in the dialog's accept method
-            pass
     
     def show_map_options(self):
         """Show map options dialog."""

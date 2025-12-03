@@ -29,6 +29,20 @@ class EPANETProject:
             'Pattern': 'PAT', 'Curve': 'C'
         }
         self.id_increment = 1
+        
+        self.default_hydraulics = {
+            'flow_units': 'LPS',
+            'headloss_formula': 'H-W',
+            'specific_gravity': 1.0,
+            'viscosity': 1.0,
+            'trials': 40,
+            'accuracy': 0.001,
+            'unbalanced': 'STOP',
+            'pattern': '',
+            'demand_multiplier': 1.0,
+            'emitter_exponent': 0.5,
+            'status_report': False
+        }
 
         # Default Map Options
         self.map_options = {
@@ -67,6 +81,38 @@ class EPANETProject:
         self.filename = ""
         self.modified = False
         self._has_results = False
+        
+        # Apply default hydraulics
+        from core.constants import FlowUnits, HeadLossType
+        opts = self.network.options
+        
+        dh = self.default_hydraulics
+        
+        # Flow Units
+        fu_str = dh.get('flow_units', 'LPS')
+        fu_map = {
+            'CFS': FlowUnits.CFS, 'GPM': FlowUnits.GPM, 'MGD': FlowUnits.MGD,
+            'IMGD': FlowUnits.IMGD, 'AFD': FlowUnits.AFD, 'LPS': FlowUnits.LPS,
+            'LPM': FlowUnits.LPM, 'MLD': FlowUnits.MLD, 'CMH': FlowUnits.CMH,
+            'CMD': FlowUnits.CMD
+        }
+        opts.flow_units = fu_map.get(fu_str, FlowUnits.LPS)
+        
+        # Headloss
+        hl_str = dh.get('headloss_formula', 'H-W')
+        if 'H-W' in hl_str: opts.headloss_formula = HeadLossType.HW
+        elif 'D-W' in hl_str: opts.headloss_formula = HeadLossType.DW
+        elif 'C-M' in hl_str: opts.headloss_formula = HeadLossType.CM
+        
+        opts.specific_gravity = float(dh.get('specific_gravity', 1.0))
+        opts.viscosity = float(dh.get('viscosity', 1.0))
+        opts.trials = int(dh.get('trials', 40))
+        opts.accuracy = float(dh.get('accuracy', 0.001))
+        opts.unbalanced = dh.get('unbalanced', 'STOP')
+        opts.pattern = dh.get('pattern', '')
+        opts.demand_multiplier = float(dh.get('demand_multiplier', 1.0))
+        opts.emitter_exponent = float(dh.get('emitter_exponent', 0.5))
+        opts.status_report = bool(dh.get('status_report', False))
     
     def open_project(self, filename: str):
         """Open a project from file."""

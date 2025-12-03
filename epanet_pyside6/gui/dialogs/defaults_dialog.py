@@ -121,7 +121,7 @@ class DefaultsDialog(QDialog):
             ("Tank Diameter", "m"),
             ("Tank Height", "m"),
             ("Pipe Length", "m"),
-            ("Auto Length", "On/Off"),
+            ("Auto Length", ""),
             ("Pipe Diameter", "mm"),
             ("Pipe Roughness", "")
         ]
@@ -134,9 +134,15 @@ class DefaultsDialog(QDialog):
             name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
             self.nodelink_table.setItem(i, 0, name_item)
             
-            # Default value (editable)
-            value_item = QTableWidgetItem("")
-            self.nodelink_table.setItem(i, 1, value_item)
+            if prop_name == "Auto Length":
+                from PySide6.QtWidgets import QComboBox
+                combo = QComboBox()
+                combo.addItems(["Off", "On"])
+                self.nodelink_table.setCellWidget(i, 1, combo)
+            else:
+                # Default value (editable)
+                value_item = QTableWidgetItem("")
+                self.nodelink_table.setItem(i, 1, value_item)
         
         layout.addWidget(self.nodelink_table)
         
@@ -172,15 +178,35 @@ class DefaultsDialog(QDialog):
         
         self.hydraulics_table.setRowCount(len(options))
         
+        from PySide6.QtWidgets import QComboBox
+        
         for i, option in enumerate(options):
             # Option name (read-only)
             name_item = QTableWidgetItem(option)
             name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
             self.hydraulics_table.setItem(i, 0, name_item)
             
-            # Default value (editable)
-            value_item = QTableWidgetItem("")
-            self.hydraulics_table.setItem(i, 1, value_item)
+            # Setup widgets for specific rows
+            if option == "Flow Units":
+                combo = QComboBox()
+                combo.addItems(["CFS", "GPM", "MGD", "IMGD", "AFD", "LPS", "LPM", "MLD", "CMH", "CMD"])
+                self.hydraulics_table.setCellWidget(i, 1, combo)
+            elif option == "Headloss Formula":
+                combo = QComboBox()
+                combo.addItems(["H-W", "D-W", "C-M"])
+                self.hydraulics_table.setCellWidget(i, 1, combo)
+            elif option == "Unbalanced":
+                combo = QComboBox()
+                combo.addItems(["STOP", "CONTINUE", "CONTINUE 10"])
+                self.hydraulics_table.setCellWidget(i, 1, combo)
+            elif option == "Status Report":
+                combo = QComboBox()
+                combo.addItems(["No", "Yes"])
+                self.hydraulics_table.setCellWidget(i, 1, combo)
+            else:
+                # Default value (editable)
+                value_item = QTableWidgetItem("")
+                self.hydraulics_table.setItem(i, 1, value_item)
         
         layout.addWidget(self.hydraulics_table)
         
@@ -227,25 +253,38 @@ class DefaultsDialog(QDialog):
         self.nodelink_table.item(1, 1).setText(defaults.get('tank_diameter', '15'))
         self.nodelink_table.item(2, 1).setText(defaults.get('tank_height', '3'))
         self.nodelink_table.item(3, 1).setText(defaults.get('pipe_length', '100'))
-        self.nodelink_table.item(4, 1).setText(defaults.get('auto_length', 'Off'))
+        
+        # Auto Length ComboBox
+        auto_len = defaults.get('auto_length', 'Off')
+        combo = self.nodelink_table.cellWidget(4, 1)
+        if combo:
+            combo.setCurrentText(auto_len)
+            
         self.nodelink_table.item(5, 1).setText(defaults.get('pipe_diameter', '300'))
         self.nodelink_table.item(6, 1).setText(defaults.get('pipe_roughness', '100'))
         
-        # Load Hydraulic options from project
-        if hasattr(self.project, 'network') and self.project.network:
-            options = self.project.network.options
-            
-            self.hydraulics_table.item(0, 1).setText(str(getattr(options, 'flow_units', 'LPS')))
-            self.hydraulics_table.item(1, 1).setText(str(getattr(options, 'headloss_formula', 'H-W')))
-            self.hydraulics_table.item(2, 1).setText(str(getattr(options, 'specific_gravity', 1.0)))
-            self.hydraulics_table.item(3, 1).setText(str(getattr(options, 'viscosity', 1.0)))
-            self.hydraulics_table.item(4, 1).setText(str(getattr(options, 'trials', 40)))
-            self.hydraulics_table.item(5, 1).setText(str(getattr(options, 'accuracy', 0.001)))
-            self.hydraulics_table.item(6, 1).setText(str(getattr(options, 'unbalanced', 'STOP')))
-            self.hydraulics_table.item(7, 1).setText(str(getattr(options, 'pattern', '') or ''))
-            self.hydraulics_table.item(8, 1).setText(str(getattr(options, 'demand_multiplier', 1.0)))
-            self.hydraulics_table.item(9, 1).setText(str(getattr(options, 'emitter_exponent', 0.5)))
-            self.hydraulics_table.item(10, 1).setText("Yes" if getattr(options, 'status_report', False) else "No")
+        # Load Hydraulic options from project defaults
+        hydraulics = getattr(self.project, 'default_hydraulics', {})
+        
+        # Helper to set combo or text
+        def set_val(row, val):
+            combo = self.hydraulics_table.cellWidget(row, 1)
+            if combo:
+                combo.setCurrentText(str(val))
+            else:
+                self.hydraulics_table.item(row, 1).setText(str(val))
+                
+        set_val(0, hydraulics.get('flow_units', 'LPS'))
+        set_val(1, hydraulics.get('headloss_formula', 'H-W'))
+        set_val(2, hydraulics.get('specific_gravity', 1.0))
+        set_val(3, hydraulics.get('viscosity', 1.0))
+        set_val(4, hydraulics.get('trials', 40))
+        set_val(5, hydraulics.get('accuracy', 0.001))
+        set_val(6, hydraulics.get('unbalanced', 'STOP'))
+        set_val(7, hydraulics.get('pattern', ''))
+        set_val(8, hydraulics.get('demand_multiplier', 1.0))
+        set_val(9, hydraulics.get('emitter_exponent', 0.5))
+        set_val(10, "Yes" if hydraulics.get('status_report', False) else "No")
         
     def accept(self):
         """Save defaults and close dialog."""
@@ -273,17 +312,43 @@ class DefaultsDialog(QDialog):
         self.project.id_increment = id_increment
         
         # Save Node/Link defaults
+        auto_len_combo = self.nodelink_table.cellWidget(4, 1)
+        auto_len = auto_len_combo.currentText() if auto_len_combo else "Off"
+        
         defaults = {
             'node_elevation': self.nodelink_table.item(0, 1).text(),
             'tank_diameter': self.nodelink_table.item(1, 1).text(),
             'tank_height': self.nodelink_table.item(2, 1).text(),
             'pipe_length': self.nodelink_table.item(3, 1).text(),
-            'auto_length': self.nodelink_table.item(4, 1).text(),
+            'auto_length': auto_len,
             'pipe_diameter': self.nodelink_table.item(5, 1).text(),
             'pipe_roughness': self.nodelink_table.item(6, 1).text()
         }
         
         self.project.default_properties = defaults
+        
+        # Save Hydraulic defaults
+        def get_val(row):
+            combo = self.hydraulics_table.cellWidget(row, 1)
+            if combo:
+                return combo.currentText()
+            return self.hydraulics_table.item(row, 1).text()
+            
+        hydraulics = {
+            'flow_units': get_val(0),
+            'headloss_formula': get_val(1),
+            'specific_gravity': get_val(2),
+            'viscosity': get_val(3),
+            'trials': get_val(4),
+            'accuracy': get_val(5),
+            'unbalanced': get_val(6),
+            'pattern': get_val(7),
+            'demand_multiplier': get_val(8),
+            'emitter_exponent': get_val(9),
+            'status_report': get_val(10) == "Yes"
+        }
+        
+        self.project.default_hydraulics = hydraulics
         
         # Save to config if checkbox is checked
         if self.save_default_check.isChecked():
@@ -306,5 +371,11 @@ class DefaultsDialog(QDialog):
         # Save Properties
         settings.beginGroup("Defaults/Properties")
         for key, value in self.project.default_properties.items():
+            settings.setValue(key, value)
+        settings.endGroup()
+        
+        # Save Hydraulics
+        settings.beginGroup("Defaults/Hydraulics")
+        for key, value in self.project.default_hydraulics.items():
             settings.setValue(key, value)
         settings.endGroup()

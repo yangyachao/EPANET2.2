@@ -10,11 +10,12 @@ class NodeItem(QGraphicsEllipseItem):
     Uses ItemIgnoresTransformations to maintain constant screen size.
     """
     
-    def __init__(self, node, radius=3.0):
+    def __init__(self, node, radius=3.0, offset=(0, 0)):
         # Radius is now in pixels, not world coordinates
         super().__init__(-radius, -radius, radius*2, radius*2)
         self.node = node
         self.radius = radius
+        self.offset_x, self.offset_y = offset
         self.normal_color = Qt.white
         
         # Cosmetic pen (width=0) - always 1 pixel regardless of zoom
@@ -22,7 +23,9 @@ class NodeItem(QGraphicsEllipseItem):
         
         # Flip Y coordinate: EPANET Y goes up, Qt Y goes down
         # Use simple negation for stability
-        self.setPos(node.x, -node.y)
+        # Apply offset: Scene X = Model X - Offset X
+        # Scene Y = -(Model Y - Offset Y)
+        self.setPos(node.x - self.offset_x, -(node.y - self.offset_y))
         
         # Critical: Ignore transformations (zoom) to keep fixed size
         self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
@@ -91,8 +94,10 @@ class NodeItem(QGraphicsEllipseItem):
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange:
             # Update node model coordinates (flip Y back to EPANET coordinate system)
-            self.node.x = value.x()
-            self.node.y = -value.y()
+            # Reverse offset: Model X = Scene X + Offset X
+            # Model Y = Offset Y - Scene Y
+            self.node.x = value.x() + self.offset_x
+            self.node.y = self.offset_y - value.y()
             # Notify connected links to update
             if hasattr(self.scene(), "update_connected_links"):
                 self.scene().update_connected_links(self.node.id)
@@ -146,16 +151,16 @@ class NodeItem(QGraphicsEllipseItem):
 class JunctionItem(NodeItem):
     """Graphics item for Junction."""
     
-    def __init__(self, node):
-        super().__init__(node, radius=3.0)
+    def __init__(self, node, offset=(0, 0)):
+        super().__init__(node, radius=3.0, offset=offset)
         self.normal_color = QColor(0, 120, 255)  # Brighter blue
         self.setBrush(QBrush(self.normal_color))
 
 class ReservoirItem(NodeItem):
     """Graphics item for Reservoir."""
     
-    def __init__(self, node):
-        super().__init__(node, radius=6.0)
+    def __init__(self, node, offset=(0, 0)):
+        super().__init__(node, radius=6.0, offset=offset)
         self.normal_color = QColor(0, 200, 0)  # Green
         self.setBrush(QBrush(self.normal_color))
 
@@ -177,8 +182,8 @@ class ReservoirItem(NodeItem):
 class TankItem(NodeItem):
     """Graphics item for Tank."""
     
-    def __init__(self, node):
-        super().__init__(node, radius=5.0)
+    def __init__(self, node, offset=(0, 0)):
+        super().__init__(node, radius=5.0, offset=offset)
         self.normal_color = QColor(255, 200, 0)  # Brighter yellow
         self.setBrush(QBrush(self.normal_color))
 
@@ -297,14 +302,35 @@ class LinkItem(QGraphicsPathItem):
         
         self.update_path()
 
+    def boundingRect(self):
+        """Override to ignore pen width in bounding rect calculation."""
+        return self.path().boundingRect()
+        
+    def shape(self):
+        """Override to ignore pen width in shape calculation."""
+        # Return the path itself. 
+        # Since MapWidget uses items(rect) with a small rect, intersection with the path is sufficient.
+        return self.path()
+
+    def paint(self, painter, option, widget=None):
+        """Override paint to avoid default selection highlight (dashed box)."""
+        # We handle selection visualization by changing the pen in itemChange.
+        # So we just draw the path.
+        painter.setPen(self.pen())
+        painter.setBrush(self.brush())
+        painter.drawPath(self.path())
+
     def show_handles(self):
         """Show vertex editing handles."""
         self.hide_handles()
         
         if hasattr(self.link, 'vertices') and self.link.vertices:
+            off_x, off_y = self.offset
             for i, (vx, vy) in enumerate(self.link.vertices):
-                # Logical to Scene
-                handle = VertexHandleItem(self, i, vx, -vy)
+                # Logical to Scene with offset
+                scene_x = vx - off_x
+                scene_y = -(vy - off_y)
+                handle = VertexHandleItem(self, i, scene_x, scene_y)
                 # handle is now a child, no need to add to scene explicitly
                 self.handles.append(handle)
                 
@@ -320,8 +346,11 @@ class LinkItem(QGraphicsPathItem):
     def update_vertex(self, index, pos):
         """Update vertex position from handle."""
         if hasattr(self.link, 'vertices') and 0 <= index < len(self.link.vertices):
-            # Scene to Logical
-            self.link.vertices[index] = (pos.x(), -pos.y())
+            # Scene to Logical with offset
+            off_x, off_y = self.offset
+            model_x = pos.x() + off_x
+            model_y = off_y - pos.y()
+            self.link.vertices[index] = (model_x, model_y)
             self.update_path()
             
     def delete_vertex(self, index):
@@ -396,7 +425,14 @@ class LinkItem(QGraphicsPathItem):
             # Segment 1 is V0 -> V1. Insert at 1.
             # Segment N is VN -> End. Insert at N.
             
-            self.link.vertices.insert(insert_idx, (pos.x(), -pos.y()))
+            # Segment N is VN -> End. Insert at N.
+            
+            # Scene to Logical with offset
+            off_x, off_y = self.offset
+            model_x = pos.x() + off_x
+            model_y = off_y - pos.y()
+            
+            self.link.vertices.insert(insert_idx, (model_x, model_y))
             self.update_path()
             if self.isSelected():
                 self.show_handles()

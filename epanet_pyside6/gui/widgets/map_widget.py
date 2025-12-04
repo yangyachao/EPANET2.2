@@ -402,24 +402,30 @@ class MapWidget(QGraphicsView):
 
         super().mouseMoveEvent(event)
 
-    def find_nearest_node(self, pos, threshold=15):
-        """Find the nearest node within threshold distance."""
+    def find_nearest_node(self, scene_pos, threshold=15):
+        """Find the nearest node within threshold distance (pixels)."""
         nearest_item = None
         min_dist = float('inf')
         
-        # Check all node items
-        # Optimization: Use scene.items(rect) for spatial query if performance is an issue
-        # For now, iterating is fine for small/medium networks
-        # Better: query scene for items near pos
+        # Convert scene pos to view pos (pixels)
+        view_pos = self.mapFromScene(scene_pos)
         
-        # Create a small rect around pos
-        rect = QRectF(pos.x() - threshold, pos.y() - threshold, threshold*2, threshold*2)
-        items = self.scene.items(rect)
+        # Create a small rect around view_pos
+        # threshold is in pixels
+        x = view_pos.x() - threshold
+        y = view_pos.y() - threshold
+        w = threshold * 2
+        h = threshold * 2
+        
+        # Get items in view coordinates
+        items = self.items(x, y, w, h)
         
         for item in items:
             if isinstance(item, NodeItem):
-                # Calculate distance
-                dist = (item.pos() - pos).manhattanLength() # Approximation is fine
+                # Calculate distance in pixels
+                item_view_pos = self.mapFromScene(item.pos())
+                dist = (item_view_pos - view_pos).manhattanLength()
+                
                 if dist < min_dist:
                     min_dist = dist
                     nearest_item = item

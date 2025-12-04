@@ -104,21 +104,17 @@ class NetworkScene(QGraphicsScene):
         # Add Nodes (with Y-axis flipping handled in Item)
         if network.nodes:
             for node in network.nodes.values():
+                offset = (self.offset_x, self.offset_y)
                 if node.node_type == NodeType.JUNCTION:
-                    item = JunctionItem(node)
+                    item = JunctionItem(node, offset)
                 elif node.node_type == NodeType.RESERVOIR:
-                    item = ReservoirItem(node)
+                    item = ReservoirItem(node, offset)
                 elif node.node_type == NodeType.TANK:
-                    item = TankItem(node)
+                    item = TankItem(node, offset)
                 else:
                     continue
                 
-                # Apply offset
-                # Scene X = Logical X - Offset X
-                # Scene Y = -(Logical Y - Offset Y)
-                x = node.x - self.offset_x
-                y = -(node.y - self.offset_y)
-                item.setPos(x, y)
+                # Position is set in NodeItem.__init__ using offset
                     
                 self.addItem(item)
                 self.node_items[node.id] = item
@@ -172,19 +168,18 @@ class NetworkScene(QGraphicsScene):
             
         node = self.project.network.nodes[node_id]
         
+        offset = (self.offset_x, self.offset_y)
+        
         if node.node_type == NodeType.JUNCTION:
-            item = JunctionItem(node)
+            item = JunctionItem(node, offset)
         elif node.node_type == NodeType.RESERVOIR:
-            item = ReservoirItem(node)
+            item = ReservoirItem(node, offset)
         elif node.node_type == NodeType.TANK:
-            item = TankItem(node)
+            item = TankItem(node, offset)
         else:
             return
             
-        # Apply offset
-        x = node.x - self.offset_x
-        y = -(node.y - self.offset_y)
-        item.setPos(x, y)
+        # Position is set in NodeItem.__init__ using offset
         
         self.addItem(item)
         self.node_items[node.id] = item
@@ -349,8 +344,8 @@ class NetworkScene(QGraphicsScene):
         # Apply transformation
         self.backdrop_item.resetTransform()
         
-        scene_x = ul_x
-        scene_y = self.max_y - ul_y
+        scene_x = ul_x - self.offset_x
+        scene_y = -(ul_y - self.offset_y)
         
         self.backdrop_item.setPos(scene_x, scene_y)
         

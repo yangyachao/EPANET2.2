@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QDialogButtonBox, QGroupBox,
     QRadioButton, QButtonGroup, QMessageBox
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSettings
 from core.constants import NodeType, LinkType
 
 class GroupEditDialog(QDialog):
@@ -19,6 +19,7 @@ class GroupEditDialog(QDialog):
         self.resize(400, 300)
         
         self.setup_ui()
+        self.load_settings()
         
     def setup_ui(self):
         """Setup UI components."""
@@ -123,7 +124,7 @@ class GroupEditDialog(QDialog):
         
         # Buttons
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self.accept)
+        button_box.accepted.connect(self.accept_and_save)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
         
@@ -195,3 +196,38 @@ class GroupEditDialog(QDialog):
             }
             
         return data
+    def accept_and_save(self):
+        """Save settings and accept."""
+        self.save_settings()
+        self.accept()
+
+    def load_settings(self):
+        """Load dialog settings."""
+        settings = QSettings("US EPA", "EPANET 2.2")
+        
+        # Filter settings
+        filter_prop = settings.value("GroupEditDialog/filter_prop")
+        filter_rel = settings.value("GroupEditDialog/filter_rel")
+        filter_val = settings.value("GroupEditDialog/filter_val")
+        
+        if filter_prop:
+            index = self.filter_prop_combo.findText(filter_prop)
+            if index >= 0:
+                self.filter_prop_combo.setCurrentIndex(index)
+                
+        if filter_rel:
+            index = self.filter_rel_combo.findText(filter_rel)
+            if index >= 0:
+                self.filter_rel_combo.setCurrentIndex(index)
+                
+        if filter_val:
+            self.filter_val_input.setText(filter_val)
+
+    def save_settings(self):
+        """Save dialog settings."""
+        settings = QSettings("US EPA", "EPANET 2.2")
+        
+        # Filter settings
+        settings.setValue("GroupEditDialog/filter_prop", self.filter_prop_combo.currentText())
+        settings.setValue("GroupEditDialog/filter_rel", self.filter_rel_combo.currentText())
+        settings.setValue("GroupEditDialog/filter_val", self.filter_val_input.text())

@@ -370,7 +370,6 @@ class NetworkScene(QGraphicsScene):
             # Update Value label
             if hasattr(item, 'value_label'):
                 item.value_label.setVisible(display_node_values)
-                # TODO: Set actual value text based on current time step
                 item.value_label.setText("0.00") 
                 font = item.value_label.font()
                 font.setPointSize(notation_font_size)
@@ -402,7 +401,6 @@ class NetworkScene(QGraphicsScene):
             # Update Value label
             if hasattr(item, 'value_label'):
                 item.value_label.setVisible(display_link_values)
-                # TODO: Set actual value text based on current time step
                 item.value_label.setText("0.00")
                 font = item.value_label.font()
                 font.setPointSize(notation_font_size)

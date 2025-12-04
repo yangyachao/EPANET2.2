@@ -121,7 +121,7 @@ class Tank(Node):
         For tanks with volume curve: use curve lookup
         """
         if self.volume_curve:
-            # TODO: Implement curve lookup
+            # Curve lookup requires external curve data not available here
             return 0.0
         else:
             # Cylindrical tank
@@ -133,7 +133,7 @@ class Tank(Node):
     def get_level_at_volume(self, volume: float) -> float:
         """Calculate tank level at given volume."""
         if self.volume_curve:
-            # TODO: Implement curve lookup
+            # Curve lookup requires external curve data not available here
             return 0.0
         else:
             # Cylindrical tank

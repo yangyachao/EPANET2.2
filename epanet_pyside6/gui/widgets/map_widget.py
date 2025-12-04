@@ -1,11 +1,23 @@
 """Map widget for displaying and editing the network."""
 
-from PySide6.QtWidgets import QGraphicsView, QMenu, QGraphicsLineItem
+from enum import Enum, auto
+from PySide6.QtWidgets import QGraphicsView, QMenu, QGraphicsLineItem, QInputDialog, QMessageBox
 from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QPainter, QPen, QColor
 from gui.graphics.scene import NetworkScene
 from gui.graphics.items import NodeItem
 from .legend_widget import LegendWidget
+
+class InteractionMode(Enum):
+    SELECT = auto()
+    PAN = auto()
+    ADD_JUNCTION = auto()
+    ADD_RESERVOIR = auto()
+    ADD_TANK = auto()
+    ADD_PIPE = auto()
+    ADD_PUMP = auto()
+    ADD_VALVE = auto()
+    ADD_LABEL = auto()
 
 class MapWidget(QGraphicsView):
     """Interactive map widget."""
@@ -42,17 +54,17 @@ class MapWidget(QGraphicsView):
         # Initial fit state
         self._first_resize = True
         
-        self.interaction_mode = 'select'
+        self.interaction_mode = InteractionMode.SELECT
         
-    def set_interaction_mode(self, mode: str):
+    def set_interaction_mode(self, mode: InteractionMode):
         """Set interaction mode (select, pan, add_junction, etc.)."""
         self.interaction_mode = mode
         print(f"DEBUG: MapWidget.set_interaction_mode called with {mode}")
         
-        if mode == 'pan':
+        if mode == InteractionMode.PAN:
             self.setDragMode(QGraphicsView.ScrollHandDrag)
             self.setCursor(Qt.OpenHandCursor)
-        elif mode == 'select':
+        elif mode == InteractionMode.SELECT:
             self.setDragMode(QGraphicsView.RubberBandDrag)
             self.setCursor(Qt.ArrowCursor)
         else:
@@ -60,11 +72,11 @@ class MapWidget(QGraphicsView):
             self.setCursor(Qt.CrossCursor)
             
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton and self.interaction_mode.startswith('add_'):
+        if event.button() == Qt.LeftButton and self.interaction_mode != InteractionMode.SELECT and self.interaction_mode != InteractionMode.PAN:
             pos = self.mapToScene(event.pos())
             
             # Check if adding link
-            if 'pipe' in self.interaction_mode or 'pump' in self.interaction_mode or 'valve' in self.interaction_mode:
+            if self.interaction_mode in [InteractionMode.ADD_PIPE, InteractionMode.ADD_PUMP, InteractionMode.ADD_VALVE]:
                 # Find nearest node within snap distance
                 node_item = self.find_nearest_node(pos)
                 
@@ -85,8 +97,8 @@ class MapWidget(QGraphicsView):
                         # Finish drawing link
                         if node_item != self.drawing_link_start_node:
                             link_type = 'Pipe'
-                            if 'pump' in self.interaction_mode: link_type = 'Pump'
-                            elif 'valve' in self.interaction_mode: link_type = 'Valve'
+                            if self.interaction_mode == InteractionMode.ADD_PUMP: link_type = 'Pump'
+                            elif self.interaction_mode == InteractionMode.ADD_VALVE: link_type = 'Valve'
                             
                             link_id = self.project.add_link(link_type, self.drawing_link_start_node.node.id, node_item.node.id)
                             self.scene.add_link(link_id)
@@ -119,19 +131,18 @@ class MapWidget(QGraphicsView):
             # Qt Y = -EPANET Y  =>  EPANET Y = -Qt Y
             logical_y = -pos.y()
             
-            if self.interaction_mode == 'add_junction':
+            if self.interaction_mode == InteractionMode.ADD_JUNCTION:
                 node_id = self.project.add_node('Junction', pos.x(), logical_y)
-            elif self.interaction_mode == 'add_reservoir':
+            elif self.interaction_mode == InteractionMode.ADD_RESERVOIR:
                 node_id = self.project.add_node('Reservoir', pos.x(), logical_y)
-            elif self.interaction_mode == 'add_tank':
+            elif self.interaction_mode == InteractionMode.ADD_TANK:
                 node_id = self.project.add_node('Tank', pos.x(), logical_y)
             
             if node_id:
                 self.scene.add_node(node_id)
             
             # Adding Label
-            if self.interaction_mode == 'add_label':
-                from PySide6.QtWidgets import QInputDialog
+            if self.interaction_mode == InteractionMode.ADD_LABEL:
                 text, ok = QInputDialog.getText(self, "Add Label", "Label Text:")
                 if ok and text:
                     # Convert to logical Y
@@ -199,7 +210,7 @@ class MapWidget(QGraphicsView):
         self.mouseMoved.emit(pos.x(), -pos.y())
         
         # Snapping logic for link drawing
-        if 'pipe' in self.interaction_mode or 'pump' in self.interaction_mode or 'valve' in self.interaction_mode:
+        if self.interaction_mode in [InteractionMode.ADD_PIPE, InteractionMode.ADD_PUMP, InteractionMode.ADD_VALVE]:
             nearest_node = self.find_nearest_node(pos)
             
             # Update cursor and highlight

@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QPushButton, QWidget, QLabel, QSpinBox, QCheckBox, QGroupBox,
     QRadioButton, QButtonGroup, QFrame
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSettings
 from PySide6.QtGui import QColor
 
 
@@ -21,6 +21,7 @@ class MapOptionsDialog(QDialog):
         
         self.options_data = {}
         self.setup_ui()
+        self.load_settings()
         
     def setup_ui(self):
         """Setup UI components."""
@@ -496,6 +497,7 @@ class MapOptionsDialog(QDialog):
         """Save options and close dialog."""
         print("DEBUG: MapOptionsDialog.accept called")
         try:
+            self.save_settings()
             options = self.get_options()
             print("DEBUG: Emitting options_updated signal")
             self.options_updated.emit(options)
@@ -505,3 +507,19 @@ class MapOptionsDialog(QDialog):
             print(f"DEBUG: Error in accept: {e}")
             import traceback
             traceback.print_exc()
+
+    def load_settings(self):
+        """Load dialog settings."""
+        settings = QSettings("US EPA", "EPANET 2.2")
+        geometry = settings.value("MapOptionsDialog/geometry")
+        if geometry:
+            self.restoreGeometry(geometry)
+            
+        current_row = settings.value("MapOptionsDialog/currentRow", 0, type=int)
+        self.category_list.setCurrentRow(current_row)
+
+    def save_settings(self):
+        """Save dialog settings."""
+        settings = QSettings("US EPA", "EPANET 2.2")
+        settings.setValue("MapOptionsDialog/geometry", self.saveGeometry())
+        settings.setValue("MapOptionsDialog/currentRow", self.category_list.currentRow())

@@ -12,7 +12,7 @@ from models.control import SimpleControl, Rule
 class EPANETProject:
     """EPANET project manager using WNTR."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize project."""
         self.engine = Engine()
         self.network = Network()
@@ -74,7 +74,7 @@ class EPANETProject:
             'background_color': '#FFFFFF'
         }
     
-    def new_project(self):
+    def new_project(self) -> None:
         """Create a new empty project."""
         self.network.clear()
         self.engine.close_project()
@@ -114,7 +114,7 @@ class EPANETProject:
         opts.emitter_exponent = float(dh.get('emitter_exponent', 0.5))
         opts.status_report = bool(dh.get('status_report', False))
     
-    def open_project(self, filename: str):
+    def open_project(self, filename: str) -> None:
         """Open a project from file."""
         try:
             self.engine.open_project(filename)
@@ -125,7 +125,7 @@ class EPANETProject:
         except Exception as e:
             raise Exception(f"Failed to open project: {e}")
     
-    def save_project(self, filename: Optional[str] = None):
+    def save_project(self, filename: Optional[str] = None) -> None:
         """Save project to file."""
         if filename is None:
             filename = self.filename
@@ -145,7 +145,7 @@ class EPANETProject:
         except Exception as e:
             raise Exception(f"Failed to save project: {e}")
 
-    def _sync_network_to_wntr(self):
+    def _sync_network_to_wntr(self) -> None:
         """Sync internal network model to WNTR model."""
         import wntr
         from core.units import UnitConverter, UnitSystem
@@ -583,7 +583,7 @@ class EPANETProject:
         # If not, we skip labels for now as they are visual only.
         pass
     
-    def close_project(self):
+    def close_project(self) -> None:
         """Close current project."""
         self.engine.close_project()
         self.network.clear()
@@ -591,7 +591,7 @@ class EPANETProject:
         self.modified = False
         self._has_results = False
     
-    def run_simulation(self, progress_callback: Optional[Callable[[int], None]] = None):
+    def run_simulation(self, progress_callback: Optional[Callable[[int], None]] = None) -> None:
         """Run simulation."""
         try:
             if progress_callback:
@@ -642,7 +642,7 @@ class EPANETProject:
             self._generate_report(False, str(e))
             raise Exception(f"Simulation failed: {e}")
             
-    def _generate_report(self, success: bool, error_msg: str = ""):
+    def _generate_report(self, success: bool, error_msg: str = "") -> None:
         """Generate a status report."""
         import datetime
         
@@ -685,7 +685,7 @@ class EPANETProject:
     def get_version(self) -> str:
         return self.engine.get_version()
     
-    def _load_network_from_wntr(self):
+    def _load_network_from_wntr(self) -> None:
         """Convert WNTR network to our internal data model."""
         from core.units import UnitConverter, UnitSystem
         
@@ -1078,7 +1078,7 @@ class EPANETProject:
                 if rule_obj:
                     self.network.rules.append(rule_obj)
             
-    def _load_results_from_engine(self):
+    def _load_results_from_engine(self) -> None:
         """Load results into network objects."""
         from core.units import UnitConverter
         
@@ -1386,7 +1386,7 @@ class EPANETProject:
         
         return label_id
 
-    def delete_node(self, node_id: str):
+    def delete_node(self, node_id: str) -> None:
         """Delete a node from the project."""
         if node_id not in self.network.nodes:
             return
@@ -1397,7 +1397,7 @@ class EPANETProject:
         self.network.remove_node(node_id)
         self.modified = True
         
-    def delete_link(self, link_id: str):
+    def delete_link(self, link_id: str) -> None:
         """Delete a link from the project."""
         if link_id not in self.network.links:
             return
@@ -1405,7 +1405,7 @@ class EPANETProject:
         self.network.remove_link(link_id)
         self.modified = True
         
-    def delete_label(self, label_id: str):
+    def delete_label(self, label_id: str) -> None:
         """Delete a label from the project."""
         if not hasattr(self.network, 'labels') or label_id not in self.network.labels:
             return

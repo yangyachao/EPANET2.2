@@ -16,13 +16,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.project import EPANETProject
 from core.exceptions import InputFileError
 from gui.widgets import BrowserWidget, PropertyEditor, MapWidget, OverviewMapWidget
+from gui.widgets.map_widget import InteractionMode
 from gui.dialogs.input_error_dialog import InputErrorDialog
 
 
 class MainWindow(QMainWindow):
     """Main application window."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.project = EPANETProject()
         self.settings = QSettings("US EPA", "EPANET 2.2")
@@ -43,18 +44,18 @@ class MainWindow(QMainWindow):
         # Start with new project
         self.new_project()
     
-    def load_recent_files(self):
+    def load_recent_files(self) -> None:
         """Load recent files from settings."""
         self.recent_files = self.settings.value("recentFiles", [])
         # Ensure it's a list of strings
         if not isinstance(self.recent_files, list):
             self.recent_files = []
             
-    def save_recent_files(self):
+    def save_recent_files(self) -> None:
         """Save recent files to settings."""
         self.settings.setValue("recentFiles", self.recent_files)
         
-    def add_recent_file(self, filename):
+    def add_recent_file(self, filename: str) -> None:
         """Add file to recent files list."""
         if filename in self.recent_files:
             self.recent_files.remove(filename)
@@ -67,7 +68,7 @@ class MainWindow(QMainWindow):
         self.save_recent_files()
         self.update_recent_files_menu()
         
-    def update_recent_files_menu(self):
+    def update_recent_files_menu(self) -> None:
         """Update recent files menu items."""
         # Clear existing actions
         for action in self.recent_file_actions:
@@ -90,7 +91,7 @@ class MainWindow(QMainWindow):
                 
             self.file_menu.insertSeparator(self.exit_action)
             
-    def open_recent_file(self, filename):
+    def open_recent_file(self, filename: str) -> None:
         """Open a recent file."""
         if not self.check_save_changes():
             return
@@ -122,7 +123,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open project:\n{str(e)}")
     
-    def setup_ui(self):
+    def setup_ui(self) -> None:
         """Setup main UI components."""
         self.setWindowTitle("EPANET 2.2 - PySide6")
         self.resize(1200, 800)
@@ -143,7 +144,7 @@ class MainWindow(QMainWindow):
         self.mdi_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setCentralWidget(self.mdi_area)
     
-    def create_menus(self):
+    def create_menus(self) -> None:
         """Create menu bar."""
         menubar = self.menuBar()
         
@@ -290,12 +291,12 @@ class MainWindow(QMainWindow):
         self.select_action = QAction("&Select", self)
         self.select_action.setCheckable(True)
         self.select_action.setChecked(True) # Default
-        self.select_action.triggered.connect(lambda: self.set_interaction_mode('select'))
+        self.select_action.triggered.connect(lambda: self.set_interaction_mode(InteractionMode.SELECT))
         self.view_menu.addAction(self.select_action)
         
         self.pan_action = QAction("&Pan", self)
         self.pan_action.setCheckable(True)
-        self.pan_action.triggered.connect(lambda: self.set_interaction_mode('pan'))
+        self.pan_action.triggered.connect(lambda: self.set_interaction_mode(InteractionMode.PAN))
         self.view_menu.addAction(self.pan_action)
         
         self.view_menu.addSeparator()
@@ -459,7 +460,7 @@ class MainWindow(QMainWindow):
         
 
     
-    def window_menu_about_to_show(self):
+    def window_menu_about_to_show(self) -> None:
         """Update window menu with list of open windows."""
         # Clear existing window actions (keep first 4: Cascade, Tile, Close All, Separator)
         actions = self.window_menu.actions()
@@ -479,18 +480,18 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda checked=False, s=subwindow: self.mdi_area.setActiveSubWindow(s))
             self.window_menu.addAction(action)
             
-    def close_all_windows(self):
+    def close_all_windows(self) -> None:
         """Close all MDI subwindows."""
         self.mdi_area.closeAllSubWindows()
 
-    def show_help_topics(self):
+    def show_help_topics(self) -> None:
         """Show help topics."""
         from gui.dialogs.help_dialog import HelpDialog
         dialog = HelpDialog("EPANET Help", parent=self)
         dialog.show()
         self.help_dialog = dialog
         
-    def show_units(self):
+    def show_units(self) -> None:
         """Show units reference."""
         from gui.dialogs.help_dialog import HelpDialog
         html = """
@@ -507,7 +508,7 @@ class MainWindow(QMainWindow):
         dialog.show()
         self.units_dialog = dialog
         
-    def show_tutorial(self):
+    def show_tutorial(self) -> None:
         """Show tutorial."""
         from gui.dialogs.help_dialog import HelpDialog
         html = """
@@ -521,13 +522,13 @@ class MainWindow(QMainWindow):
         dialog.show()
         self.tutorial_dialog = dialog
         
-    def show_about(self):
+    def show_about(self) -> None:
         """Show about dialog."""
         from gui.dialogs.about_dialog import AboutDialog
         dialog = AboutDialog(self)
         dialog.exec()
         
-    def page_setup(self):
+    def page_setup(self) -> None:
         """Show page setup dialog."""
         # For now, just a placeholder or basic QPageSetupDialog if needed
         # QPageSetupDialog requires a QPrinter
@@ -536,7 +537,7 @@ class MainWindow(QMainWindow):
         dialog = QPageSetupDialog(printer, self)
         dialog.exec()
         
-    def print_preview(self):
+    def print_preview(self) -> None:
         """Show print preview."""
         from PySide6.QtPrintSupport import QPrintPreviewDialog, QPrinter
         printer = QPrinter()
@@ -553,7 +554,7 @@ class MainWindow(QMainWindow):
         scene.render(painter, target=QRectF(printer.pageRect(QPrinter.DevicePixel)), source=rect)
         painter.end()
         
-    def print_map(self):
+    def print_map(self) -> None:
         """Print map."""
         from PySide6.QtPrintSupport import QPrintDialog, QPrinter
         printer = QPrinter()
@@ -565,14 +566,14 @@ class MainWindow(QMainWindow):
             scene.render(painter, target=QRectF(printer.pageRect(QPrinter.DevicePixel)), source=rect)
             painter.end()
 
-    def show_status_report(self):
+    def show_status_report(self) -> None:
         """Show status report."""
         from gui.reports.status_report import StatusReport
         report = StatusReport(self.project)
         subwindow = self.mdi_area.addSubWindow(report)
         subwindow.showMaximized()
 
-    def show_energy_report(self):
+    def show_energy_report(self) -> None:
         """Show energy report."""
         from gui.views.energy_view import EnergyView
         report = EnergyView(self.project)
@@ -580,7 +581,7 @@ class MainWindow(QMainWindow):
         subwindow.setWindowTitle("Energy Report")
         subwindow.showMaximized()
 
-    def show_calibration_report(self):
+    def show_calibration_report(self) -> None:
         """Show calibration report."""
         from gui.views.calibration_view import CalibrationView
         report = CalibrationView(self.project)
@@ -588,21 +589,21 @@ class MainWindow(QMainWindow):
         subwindow.setWindowTitle("Calibration Report")
         subwindow.showMaximized()
 
-    def show_reaction_report(self):
+    def show_reaction_report(self) -> None:
         """Show reaction report."""
         from gui.reports.reaction_report import ReactionReport
         report = ReactionReport(self.project)
         subwindow = self.mdi_area.addSubWindow(report)
         subwindow.showMaximized()
 
-    def show_full_report(self):
+    def show_full_report(self) -> None:
         """Show full report."""
         from gui.reports.full_report import FullReport
         report = FullReport(self.project)
         subwindow = self.mdi_area.addSubWindow(report)
         subwindow.showMaximized()
         
-    def export_map(self):
+    def export_map(self) -> None:
         """Export map to image file."""
         file_path, _ = QFileDialog.getSaveFileName(
             self, "Export Map", "", 
@@ -625,7 +626,7 @@ class MainWindow(QMainWindow):
             image.save(file_path)
             self.status_bar.showMessage(f"Map exported to {file_path}")
 
-    def create_icon_from_text(self, text, color=Qt.black):
+    def create_icon_from_text(self, text: str, color: QColor = Qt.black) -> QIcon:
         """Create a QIcon from a text character."""
         pixmap = QPixmap(32, 32)
         pixmap.fill(Qt.transparent)
@@ -642,7 +643,7 @@ class MainWindow(QMainWindow):
         
         return QIcon(pixmap)
 
-    def load_icon(self, name):
+    def load_icon(self, name: str) -> QIcon:
         """Load icon from resources."""
         # Assuming resources are in ../resources/icons relative to this file
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -651,7 +652,7 @@ class MainWindow(QMainWindow):
             return QIcon(icon_path)
         return QIcon() # Return empty icon if not found
 
-    def create_toolbars(self):
+    def create_toolbars(self) -> None:
         """Create toolbars."""
         # Standard toolbar
         self.std_toolbar = QToolBar("Standard")
@@ -694,19 +695,19 @@ class MainWindow(QMainWindow):
         self.add_junction_action = QAction(self.load_icon("junction.svg"), "Add Junction", self)
         self.add_junction_action.setCheckable(True)
         self.add_junction_action.setToolTip("Add Junction")
-        self.add_junction_action.triggered.connect(lambda: self.set_interaction_mode('add_junction'))
+        self.add_junction_action.triggered.connect(lambda: self.set_interaction_mode(InteractionMode.ADD_JUNCTION))
         self.std_toolbar.addAction(self.add_junction_action)
         
         self.add_reservoir_action = QAction(self.load_icon("reservoir.svg"), "Add Reservoir", self)
         self.add_reservoir_action.setCheckable(True)
         self.add_reservoir_action.setToolTip("Add Reservoir")
-        self.add_reservoir_action.triggered.connect(lambda: self.set_interaction_mode('add_reservoir'))
+        self.add_reservoir_action.triggered.connect(lambda: self.set_interaction_mode(InteractionMode.ADD_RESERVOIR))
         self.std_toolbar.addAction(self.add_reservoir_action)
         
         self.add_tank_action = QAction(self.load_icon("tank.svg"), "Add Tank", self)
         self.add_tank_action.setCheckable(True)
         self.add_tank_action.setToolTip("Add Tank")
-        self.add_tank_action.triggered.connect(lambda: self.set_interaction_mode('add_tank'))
+        self.add_tank_action.triggered.connect(lambda: self.set_interaction_mode(InteractionMode.ADD_TANK))
         self.std_toolbar.addAction(self.add_tank_action)
         
         self.std_toolbar.addSeparator()
@@ -714,25 +715,25 @@ class MainWindow(QMainWindow):
         self.add_pipe_action = QAction(self.load_icon("pipe.svg"), "Add Pipe", self)
         self.add_pipe_action.setCheckable(True)
         self.add_pipe_action.setToolTip("Add Pipe")
-        self.add_pipe_action.triggered.connect(lambda: self.set_interaction_mode('add_pipe'))
+        self.add_pipe_action.triggered.connect(lambda: self.set_interaction_mode(InteractionMode.ADD_PIPE))
         self.std_toolbar.addAction(self.add_pipe_action)
         
         self.add_pump_action = QAction(self.load_icon("pump.svg"), "Add Pump", self)
         self.add_pump_action.setCheckable(True)
         self.add_pump_action.setToolTip("Add Pump")
-        self.add_pump_action.triggered.connect(lambda: self.set_interaction_mode('add_pump'))
+        self.add_pump_action.triggered.connect(lambda: self.set_interaction_mode(InteractionMode.ADD_PUMP))
         self.std_toolbar.addAction(self.add_pump_action)
         
         self.add_valve_action = QAction(self.load_icon("valve.svg"), "Add Valve", self)
         self.add_valve_action.setCheckable(True)
         self.add_valve_action.setToolTip("Add Valve")
-        self.add_valve_action.triggered.connect(lambda: self.set_interaction_mode('add_valve'))
+        self.add_valve_action.triggered.connect(lambda: self.set_interaction_mode(InteractionMode.ADD_VALVE))
         self.std_toolbar.addAction(self.add_valve_action)
         
         self.add_label_action = QAction(self.load_icon("label.svg"), "Add Label", self)
         self.add_label_action.setCheckable(True)
         self.add_label_action.setToolTip("Add Label")
-        self.add_label_action.triggered.connect(lambda: self.set_interaction_mode('add_label'))
+        self.add_label_action.triggered.connect(lambda: self.set_interaction_mode(InteractionMode.ADD_LABEL))
         self.std_toolbar.addAction(self.add_label_action)
         
         self.std_toolbar.addSeparator()
@@ -785,7 +786,7 @@ class MainWindow(QMainWindow):
         find_action.triggered.connect(self.find_object)
         self.std_toolbar.addAction(find_action)
     
-    def create_dock_widgets(self):
+    def create_dock_widgets(self) -> None:
         """Create dock widgets."""
         # Browser dock
         self.browser_dock = QDockWidget("Browser", self)
@@ -1934,23 +1935,23 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
 
-    def set_interaction_mode(self, mode: str):
+    def set_interaction_mode(self, mode: InteractionMode):
         """Set map interaction mode."""
         self.map_widget.set_interaction_mode(mode)
         
         # Update UI state
-        self.select_action.setChecked(mode == 'select')
-        self.pan_action.setChecked(mode == 'pan')
+        self.select_action.setChecked(mode == InteractionMode.SELECT)
+        self.pan_action.setChecked(mode == InteractionMode.PAN)
         
         # Object creation actions
         if hasattr(self, 'add_junction_action'):
-            self.add_junction_action.setChecked(mode == 'add_junction')
-            self.add_reservoir_action.setChecked(mode == 'add_reservoir')
-            self.add_tank_action.setChecked(mode == 'add_tank')
-            self.add_pipe_action.setChecked(mode == 'add_pipe')
-            self.add_pump_action.setChecked(mode == 'add_pump')
-            self.add_valve_action.setChecked(mode == 'add_valve')
-            self.add_label_action.setChecked(mode == 'add_label')
+            self.add_junction_action.setChecked(mode == InteractionMode.ADD_JUNCTION)
+            self.add_reservoir_action.setChecked(mode == InteractionMode.ADD_RESERVOIR)
+            self.add_tank_action.setChecked(mode == InteractionMode.ADD_TANK)
+            self.add_pipe_action.setChecked(mode == InteractionMode.ADD_PIPE)
+            self.add_pump_action.setChecked(mode == InteractionMode.ADD_PUMP)
+            self.add_valve_action.setChecked(mode == InteractionMode.ADD_VALVE)
+            self.add_label_action.setChecked(mode == InteractionMode.ADD_LABEL)
         
         # Update map widget
         if hasattr(self, 'map_widget'):

@@ -777,29 +777,29 @@ class MainWindow(QMainWindow):
         contour_action.triggered.connect(self.create_contour)
         self.std_toolbar.addAction(contour_action)
         
-        status_action = QAction(self.create_icon_from_text("ℹ️"), "Status", self)
+        status_action = QAction(self.load_icon("status.svg"), "Status", self)
         status_action.triggered.connect(self.create_status)
         self.std_toolbar.addAction(status_action)
         
-        calib_action = QAction(self.create_icon_from_text("🎯"), "Calibration", self)
+        calib_action = QAction(self.load_icon("calibration.svg"), "Calibration", self)
         calib_action.triggered.connect(self.create_calibration)
         self.std_toolbar.addAction(calib_action)
         
-        energy_action = QAction(self.create_icon_from_text("⚡"), "Energy", self)
+        energy_action = QAction(self.load_icon("energy.svg"), "Energy", self)
         energy_action.triggered.connect(self.create_energy)
         self.std_toolbar.addAction(energy_action)
         
         self.std_toolbar.addSeparator()
         
         # Map Options
-        map_options_action = QAction(self.create_icon_from_text("⚙️"), "Map Options", self)
+        map_options_action = QAction(self.load_icon("map_options.svg"), "Map Options", self)
         map_options_action.triggered.connect(self.show_map_options)
         self.std_toolbar.addAction(map_options_action)
         
         self.std_toolbar.addSeparator()
         
         # Find Object
-        find_action = QAction(self.create_icon_from_text("🔍"), "Find", self)
+        find_action = QAction(self.load_icon("find.svg"), "Find", self)
         find_action.setToolTip("Find Object")
         find_action.triggered.connect(self.find_object)
         self.std_toolbar.addAction(find_action)
@@ -854,21 +854,21 @@ class MainWindow(QMainWindow):
         self.backdrop_toolbar.setObjectName("BackdropToolbar")
         self.addToolBar(Qt.TopToolBarArea, self.backdrop_toolbar)
         
-        load_backdrop_action = QAction(QIcon(), "Load Backdrop", self)
+        load_backdrop_action = QAction(self.load_icon("backdrop_load.svg"), "Load Backdrop", self)
         load_backdrop_action.setToolTip("Load Backdrop Image")
         load_backdrop_action.triggered.connect(self.load_backdrop)
         self.backdrop_toolbar.addAction(load_backdrop_action)
         
-        align_backdrop_action = QAction(QIcon(), "Align Backdrop", self)
+        align_backdrop_action = QAction(self.load_icon("backdrop_align.svg"), "Align Backdrop", self)
         align_backdrop_action.setToolTip("Align Backdrop Image")
         align_backdrop_action.triggered.connect(self.align_backdrop)
         self.backdrop_toolbar.addAction(align_backdrop_action)
         
-        self.show_backdrop_action.setIcon(QIcon()) # Add icon if available
+        self.show_backdrop_action.setIcon(self.load_icon("backdrop_show.svg")) # Add icon if available
         self.show_backdrop_action.setToolTip("Toggle Backdrop Visibility")
         self.backdrop_toolbar.addAction(self.show_backdrop_action)
         
-        unload_backdrop_action = QAction(QIcon(), "Unload Backdrop", self)
+        unload_backdrop_action = QAction(self.load_icon("backdrop_unload.svg"), "Unload Backdrop", self)
         unload_backdrop_action.setToolTip("Unload Backdrop Image")
         unload_backdrop_action.triggered.connect(self.unload_backdrop)
         self.backdrop_toolbar.addAction(unload_backdrop_action)

@@ -1,6 +1,7 @@
 """Map widget for displaying and editing the network."""
 
 from enum import Enum, auto
+import os
 from PySide6.QtWidgets import QGraphicsView, QMenu, QGraphicsLineItem, QGraphicsPathItem, QInputDialog, QMessageBox, QGraphicsItem
 from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QPainter, QPen, QColor, QPainterPath, QIcon
@@ -70,6 +71,15 @@ class MapWidget(QGraphicsView):
         self.initial_backdrop_state = None
         self.backdrop_drag_start_pos = None
         self.backdrop_item_start_pos = None
+        
+    def load_icon(self, name: str) -> QIcon:
+        """Load icon from resources."""
+        # Assuming resources are in ../../resources/icons relative to this file
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        icon_path = os.path.join(base_dir, "resources", "icons", name)
+        if os.path.exists(icon_path):
+            return QIcon(icon_path)
+        return QIcon() # Return empty icon if not found
         
     def set_interaction_mode(self, mode: InteractionMode):
         """Set interaction mode (select, pan, add_junction, etc.)."""
@@ -641,19 +651,22 @@ class MapWidget(QGraphicsView):
         
         # Map Options action
         options_action = menu.addAction("Map Options...")
-        options_action.setIcon(QIcon()) # Add icon if available
+        options_action.setIcon(self.load_icon("map_options.svg"))
         options_action.triggered.connect(lambda: self.map_options_requested.emit())
         
         menu.addSeparator()
         
         # Zoom actions
-        zoom_in_action = menu.addAction("🔍 Zoom In")
+        zoom_in_action = menu.addAction("Zoom In")
+        zoom_in_action.setIcon(self.load_icon("zoom_in.svg"))
         zoom_in_action.triggered.connect(lambda: self.scale(1.2, 1.2))
         
-        zoom_out_action = menu.addAction("🔍 Zoom Out")
+        zoom_out_action = menu.addAction("Zoom Out")
+        zoom_out_action.setIcon(self.load_icon("zoom_out.svg"))
         zoom_out_action.triggered.connect(lambda: self.scale(0.8, 0.8))
         
-        fit_action = menu.addAction("📐 Fit to Window")
+        fit_action = menu.addAction("Fit to Window")
+        fit_action.setIcon(self.load_icon("fit_window.svg"))
         fit_action.triggered.connect(self.fit_network)
         
         menu.exec(event.globalPos())

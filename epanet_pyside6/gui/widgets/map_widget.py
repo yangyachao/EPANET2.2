@@ -1,9 +1,9 @@
 """Map widget for displaying and editing the network."""
 
 from enum import Enum, auto
-from PySide6.QtWidgets import QGraphicsView, QMenu, QGraphicsLineItem, QInputDialog, QMessageBox
+from PySide6.QtWidgets import QGraphicsView, QMenu, QGraphicsLineItem, QGraphicsPathItem, QInputDialog, QMessageBox
 from PySide6.QtCore import Qt, QRectF, Signal
-from PySide6.QtGui import QPainter, QPen, QColor
+from PySide6.QtGui import QPainter, QPen, QColor, QPainterPath
 from gui.graphics.scene import NetworkScene
 from gui.graphics.items import NodeItem
 from .legend_widget import LegendWidget
@@ -50,7 +50,9 @@ class MapWidget(QGraphicsView):
         
         # Link drawing state
         self.drawing_link_start_node = None
-        self.temp_link_line = None
+        self.drawing_link_start_node = None
+        self.temp_link_path = None
+        self.current_link_vertices = []
         
         # Initial fit state
         self._first_resize = True
@@ -125,15 +127,20 @@ class MapWidget(QGraphicsView):
                     if not self.drawing_link_start_node:
                         # Start drawing link
                         self.drawing_link_start_node = node_item
-                        self.temp_link_line = QGraphicsLineItem(
-                            node_item.pos().x(), node_item.pos().y(),
-                            pos.x(), pos.y()
-                        )
-                        # High visibility pen for drawing
+                        self.current_link_vertices = []
+                        
+                        self.temp_link_path = QGraphicsPathItem()
                         pen = QPen(QColor(0, 120, 255), 2, Qt.SolidLine)
                         pen.setCosmetic(True)
-                        self.temp_link_line.setPen(pen)
-                        self.scene.addItem(self.temp_link_line)
+                        self.temp_link_path.setPen(pen)
+                        self.scene.addItem(self.temp_link_path)
+                        
+                        # Initial path
+                        path = QPainterPath()
+                        path.moveTo(node_item.pos())
+                        path.lineTo(pos)
+                        self.temp_link_path.setPath(path)
+                        
                     else:
                         # Finish drawing link
                         if node_item != self.drawing_link_start_node:
@@ -141,13 +148,19 @@ class MapWidget(QGraphicsView):
                             if self.interaction_mode == InteractionMode.ADD_PUMP: link_type = 'Pump'
                             elif self.interaction_mode == InteractionMode.ADD_VALVE: link_type = 'Valve'
                             
-                            link_id = self.project.add_link(link_type, self.drawing_link_start_node.node.id, node_item.node.id)
+                            # Convert vertices to logical coordinates
+                            logical_vertices = []
+                            for vx, vy in self.current_link_vertices:
+                                logical_vertices.append((vx, -vy))
+                            
+                            link_id = self.project.add_link(link_type, self.drawing_link_start_node.node.id, node_item.node.id, vertices=logical_vertices)
                             self.scene.add_link(link_id)
                             
                             # Reset state
-                            self.scene.removeItem(self.temp_link_line)
-                            self.temp_link_line = None
+                            self.scene.removeItem(self.temp_link_path)
+                            self.temp_link_path = None
                             self.drawing_link_start_node = None
+                            self.current_link_vertices = []
                             
                             # Clear highlight
                             if hasattr(self, 'last_highlighted_node') and self.last_highlighted_node:
@@ -158,12 +171,18 @@ class MapWidget(QGraphicsView):
                             self.scene.update_scene_rect()
                             self.network_changed.emit()
                 else:
-                    # Clicked on empty space while drawing? Cancel? Or ignore?
-                    # If start node is set, user might want to cancel by clicking empty space
+                    # Clicked on empty space while drawing -> Add Vertex
                     if self.drawing_link_start_node:
-                        self.scene.removeItem(self.temp_link_line)
-                        self.temp_link_line = None
-                        self.drawing_link_start_node = None
+                        # Add vertex point (scene coordinates)
+                        self.current_link_vertices.append((pos.x(), pos.y()))
+                        
+                        # Update path visualization
+                        path = QPainterPath()
+                        path.moveTo(self.drawing_link_start_node.pos())
+                        for vx, vy in self.current_link_vertices:
+                            path.lineTo(vx, vy)
+                        path.lineTo(pos) # Current mouse pos
+                        self.temp_link_path.setPath(path)
                 
                 return
 
@@ -277,17 +296,21 @@ class MapWidget(QGraphicsView):
                     self.last_highlighted_node.set_highlight(False)
                     self.last_highlighted_node = None
                 
-            if self.temp_link_line:
-                line = self.temp_link_line.line()
+            if self.temp_link_path:
+                path = QPainterPath()
+                path.moveTo(self.drawing_link_start_node.pos())
+                
+                for vx, vy in self.current_link_vertices:
+                    path.lineTo(vx, vy)
                 
                 if nearest_node:
                     # Snap to node center
-                    line.setP2(nearest_node.pos())
+                    path.lineTo(nearest_node.pos())
                 else:
                     # Follow mouse
-                    line.setP2(pos)
+                    path.lineTo(pos)
                     
-                self.temp_link_line.setLine(line)
+                self.temp_link_path.setPath(path)
             
         # Tooltip logic
         item = self.scene.itemAt(pos, self.transform())
@@ -424,7 +447,15 @@ class MapWidget(QGraphicsView):
             ))
             
             delete_action = menu.addAction("Delete")
+            delete_action = menu.addAction("Delete")
             delete_action.triggered.connect(self.delete_selected_items)
+            
+            if hasattr(item, 'link'):
+                menu.addSeparator()
+                add_vertex_action = menu.addAction("Add Vertex")
+                # Capture position for adding vertex
+                pos = self.mapToScene(event.pos())
+                add_vertex_action.triggered.connect(lambda: item.add_vertex(pos))
             
             menu.addSeparator()
             

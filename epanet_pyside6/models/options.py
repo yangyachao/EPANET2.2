@@ -71,8 +71,19 @@ class Options:
     nodes_report: str = "NONE"
     links_report: str = "NONE"
     
+    # Default Properties (for new objects)
+    defaults: dict = None
+    
     def __post_init__(self):
         """Validate options after initialization."""
+        if self.defaults is None:
+            self.defaults = {
+                'pipe_length': 1000.0,
+                'pipe_diameter': 300.0,
+                'pipe_roughness': 100.0,
+                'auto_length': 'Off'
+            }
+            
         if self.trials < 1:
             raise ValueError("Trials must be at least 1")
         if self.accuracy <= 0:

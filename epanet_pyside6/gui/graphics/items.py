@@ -1,6 +1,6 @@
 """Graphics items for EPANET network components."""
 
-from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsItem, QGraphicsDropShadowEffect, QGraphicsSimpleTextItem
+from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsItem, QGraphicsDropShadowEffect, QGraphicsSimpleTextItem, QGraphicsRectItem, QMenu
 from PySide6.QtCore import Qt, QRectF, QPointF
 from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPainter, QFont, QTransform, QPolygonF
 
@@ -201,6 +201,45 @@ class TankItem(NodeItem):
         path.addRect(-r, -r*1.2, r*2, r*2.4)
         return path
 
+class VertexHandleItem(QGraphicsRectItem):
+    """Handle for editing link vertices."""
+    
+    def __init__(self, link_item, index, x, y):
+        size = 6
+        # Pass link_item as parent
+        super().__init__(-size/2, -size/2, size, size, link_item)
+        self.link_item = link_item
+        self.index = index
+        
+        self.setPos(x, y)
+        
+        self.setFlag(QGraphicsItem.ItemIsMovable)
+        # self.setFlag(QGraphicsItem.ItemIsSelectable) # Don't select handle, keep link selected
+        self.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
+        self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        
+        self.setBrush(QBrush(Qt.white))
+        self.setPen(QPen(Qt.black, 1))
+        self.setCursor(Qt.SizeAllCursor)
+        self.setZValue(20) # Above links
+        
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemPositionChange:
+            # Update vertex in link model
+            # Value is the new position (scene coordinates)
+            self.link_item.update_vertex(self.index, value)
+            
+        return super().itemChange(change, value)
+
+    def contextMenuEvent(self, event):
+        """Show context menu to delete vertex."""
+        menu = QMenu()
+        delete_action = menu.addAction("Delete Vertex")
+        action = menu.exec_(event.screenPos())
+        
+        if action == delete_action:
+            self.link_item.delete_vertex(self.index)
+
 class LinkItem(QGraphicsPathItem):
     """Base class for link graphics items."""
     
@@ -235,7 +274,117 @@ class LinkItem(QGraphicsPathItem):
         self.setPen(self.normal_pen)
         self.setToolTip(f"{link.id}\nType: {link.link_type.name}")
         
+        self.update_path()
+        
+        self.setPen(self.normal_pen)
+        self.setToolTip(f"{link.id}\nType: {link.link_type.name}")
+        
+        self.handles = []
         self.update_label_positions()
+
+    def show_handles(self):
+        """Show vertex editing handles."""
+        self.hide_handles()
+        
+        if hasattr(self.link, 'vertices') and self.link.vertices:
+            for i, (vx, vy) in enumerate(self.link.vertices):
+                # Logical to Scene
+                handle = VertexHandleItem(self, i, vx, -vy)
+                # handle is now a child, no need to add to scene explicitly
+                self.handles.append(handle)
+                
+    def hide_handles(self):
+        """Hide vertex editing handles."""
+        if self.handles:
+            scene = self.scene()
+            if scene:
+                for handle in self.handles:
+                    scene.removeItem(handle)
+            self.handles = []
+
+    def update_vertex(self, index, pos):
+        """Update vertex position from handle."""
+        if hasattr(self.link, 'vertices') and 0 <= index < len(self.link.vertices):
+            # Scene to Logical
+            self.link.vertices[index] = (pos.x(), -pos.y())
+            self.update_path()
+            
+    def delete_vertex(self, index):
+        """Delete a vertex."""
+        if hasattr(self.link, 'vertices') and 0 <= index < len(self.link.vertices):
+            self.link.vertices.pop(index)
+            self.update_path()
+            # Re-create handles to update indices
+            if self.isSelected():
+                self.show_handles()
+                
+    def add_vertex(self, pos):
+        """Add a vertex at the given position (scene coords)."""
+        if not hasattr(self.link, 'vertices') or self.link.vertices is None:
+            self.link.vertices = []
+            
+        # Find best insertion index based on distance to segments
+        # Simple approach: find nearest segment
+        best_index = len(self.link.vertices)
+        min_dist = float('inf')
+        
+        # Construct full point list: Start -> V1 -> V2 -> ... -> End
+        points = [self.from_pos]
+        for vx, vy in self.link.vertices:
+            points.append(QPointF(vx, -vy))
+        points.append(self.to_pos)
+        
+        # Check each segment
+        from PySide6.QtCore import QLineF
+        for i in range(len(points) - 1):
+            line = QLineF(points[i], points[i+1])
+            # Distance from point to line segment
+            # Project point onto line
+            # This is a bit complex to do perfectly, but we can just insert based on projection
+            pass 
+            
+        # Simplified: Just append for now, or use a spatial check?
+        # Better: We need to insert it where the user clicked.
+        # Let's iterate segments and find which one is closest to the click
+        
+        insert_idx = -1
+        min_dist = float('inf')
+        
+        for i in range(len(points) - 1):
+            p1 = points[i]
+            p2 = points[i+1]
+            line = QLineF(p1, p2)
+            
+            # Distance from pos to segment
+            # Using simple perpendicular distance if projection falls on segment
+            # Or distance to endpoints
+            
+            # Helper to get dist to segment
+            # ...
+            # For now, let's assume the user clicked ON the line, so we just check which segment is closest
+            
+            # Simple check: if point is roughly on the segment
+            # We can check distance to p1 + distance to p2 vs length of p1-p2
+            d1 = QLineF(p1, pos).length()
+            d2 = QLineF(pos, p2).length()
+            len_seg = line.length()
+            
+            # If d1 + d2 is close to len_seg, then pos is on segment
+            diff = (d1 + d2) - len_seg
+            if diff < min_dist:
+                min_dist = diff
+                insert_idx = i
+        
+        if insert_idx != -1:
+            # insert_idx corresponds to the segment index.
+            # Segment 0 is Start -> V0. Insert at 0.
+            # Segment 1 is V0 -> V1. Insert at 1.
+            # Segment N is VN -> End. Insert at N.
+            
+            self.link.vertices.insert(insert_idx, (pos.x(), -pos.y()))
+            self.update_path()
+            if self.isSelected():
+                self.show_handles()
 
     def update_label_positions(self):
         """Update positions of text labels."""
@@ -300,10 +449,13 @@ class LinkItem(QGraphicsPathItem):
                 # self.setGraphicsEffect(shadow)
                 
                 self.setZValue(10)
+                self.setZValue(10)
+                self.show_handles()
             else:
                 self.setPen(self.normal_pen)
                 self.setGraphicsEffect(None)
                 self.setZValue(0)
+                self.hide_handles()
         return super().itemChange(change, value)
         
     def set_color(self, color):
@@ -323,6 +475,14 @@ class LinkItem(QGraphicsPathItem):
     def update_path(self):
         path = QPainterPath()
         path.moveTo(self.from_pos)
+        
+        # Add vertices if present
+        if hasattr(self.link, 'vertices') and self.link.vertices:
+            for vx, vy in self.link.vertices:
+                # Vertices are in logical coordinates (EPANET Y up)
+                # Convert to scene coordinates (Qt Y down)
+                path.lineTo(vx, -vy)
+                
         path.lineTo(self.to_pos)
         self.setPath(path)
         self.update_label_positions()

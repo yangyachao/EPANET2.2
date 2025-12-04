@@ -1294,38 +1294,41 @@ class EPANETProject:
         
         return node_id
 
-    def add_link(self, link_type: str, from_node: str, to_node: str) -> str:
+    def add_link(self, link_type: str, from_node: str, to_node: str, vertices: list = None) -> str:
         """Add a new link to the project.
         
         Args:
             link_type: 'Pipe', 'Pump', or 'Valve'
             from_node: Start node ID
             to_node: End node ID
+            vertices: Optional list of (x, y) tuples for vertices
             
         Returns:
-            ID of the new link
+            The ID of the new link
         """
         # Generate ID
-        prefix = self.default_prefixes.get(link_type, 'L')
-        increment = self.id_increment
+        prefix = {
+            'Pipe': 'P',
+            'Pump': 'P', # Or PU?
+            'Valve': 'V'
+        }.get(link_type, 'L')
         
+        increment = self.id_increment
         while True:
             link_id = f"{prefix}{increment}"
             if link_id not in self.network.links:
                 break
             increment += 1
-            
-        # Update increment for next time
         self.id_increment = increment + 1
         
         # Get defaults
-        defaults = self.default_properties
+        defaults = self.network.options.defaults
         
-        # Create link object
+        link = None
         if link_type == 'Pipe':
-            length = float(defaults.get('pipe_length', 100))
-            diam = float(defaults.get('pipe_diameter', 300))
-            rough = float(defaults.get('pipe_roughness', 100))
+            length = float(defaults.get('pipe_length', 1000.0))
+            diam = float(defaults.get('pipe_diameter', 300.0)) # mm
+            rough = float(defaults.get('pipe_roughness', 100.0))
             
             # Auto Length check (requires calculating distance)
             if defaults.get('auto_length') == 'On':
@@ -1334,8 +1337,18 @@ class EPANETProject:
                 n2 = self.network.nodes.get(to_node)
                 if n1 and n2:
                     import math
-                    dist = math.sqrt((n2.x - n1.x)**2 + (n2.y - n1.y)**2)
-                    length = dist
+                    # Calculate total length including vertices
+                    points = [(n1.x, n1.y)]
+                    if vertices:
+                        points.extend(vertices)
+                    points.append((n2.x, n2.y))
+                    
+                    total_dist = 0.0
+                    for i in range(len(points) - 1):
+                        p1 = points[i]
+                        p2 = points[i+1]
+                        total_dist += math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+                    length = total_dist
             
             link = Pipe(link_id, from_node, to_node, length=length, diameter=diam, roughness=rough)
             
@@ -1348,6 +1361,10 @@ class EPANETProject:
             
         else:
             raise ValueError(f"Unknown link type: {link_type}")
+            
+        # Add vertices if provided
+        if vertices:
+            link.vertices = vertices
             
         # Add to network
         self.network.add_link(link)

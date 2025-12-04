@@ -605,9 +605,19 @@ class MapWidget(QGraphicsView):
                 self.scene.clearSelection()
                 item.setSelected(True)
                 
-            # Properties action (Selection already triggers update, so just a placeholder or focus)
-            # props_action = menu.addAction("Properties")
-            # props_action.triggered.connect(...) 
+            # Properties action
+            props_action = menu.addAction("Properties")
+            def show_props():
+                self.scene.clearSelection()
+                item.setSelected(True)
+                # Manually emit signal to ensure property editor updates
+                if hasattr(item, 'node'):
+                    self.scene.selectionChanged.emit(item.node)
+                elif hasattr(item, 'link'):
+                    self.scene.selectionChanged.emit(item.link)
+                elif hasattr(item, 'label'):
+                    self.scene.selectionChanged.emit(item.label)
+            props_action.triggered.connect(show_props) 
             
             delete_action = menu.addAction("Delete")
             delete_action.triggered.connect(self.delete_selected_items)

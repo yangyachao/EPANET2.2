@@ -546,31 +546,9 @@ class MainWindow(QMainWindow):
         dialog = AboutDialog(self)
         dialog.exec()
         
-    def page_setup(self) -> None:
-        """Show page setup dialog."""
-        # For now, just a placeholder or basic QPageSetupDialog if needed
-        # QPageSetupDialog requires a QPrinter
-        from PySide6.QtPrintSupport import QPageSetupDialog, QPrinter
-        printer = QPrinter()
-        dialog = QPageSetupDialog(printer, self)
-        dialog.exec()
+
         
-    def print_preview(self) -> None:
-        """Show print preview."""
-        from PySide6.QtPrintSupport import QPrintPreviewDialog, QPrinter
-        printer = QPrinter()
-        dialog = QPrintPreviewDialog(printer, self)
-        dialog.paintRequested.connect(self._print_preview_paint)
-        dialog.exec()
-        
-    def _print_preview_paint(self, printer):
-        """Paint scene to printer for preview."""
-        painter = QPainter(printer)
-        # Render map scene
-        scene = self.map_widget.scene
-        rect = scene.itemsBoundingRect()
-        scene.render(painter, target=QRectF(printer.pageRect(QPrinter.DevicePixel)), source=rect)
-        painter.end()
+
         
     def print_map(self) -> None:
         """Print map."""
@@ -621,28 +599,7 @@ class MainWindow(QMainWindow):
         subwindow = self.mdi_area.addSubWindow(report)
         subwindow.showMaximized()
         
-    def export_map(self) -> None:
-        """Export map to image file."""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Export Map", "", 
-            "PNG Image (*.png);;JPEG Image (*.jpg);;PDF Document (*.pdf)"
-        )
-        
-        if file_path:
-            # Grab the scene content
-            scene = self.map_widget.scene
-            rect = scene.itemsBoundingRect()
-            
-            # Create image
-            image = QImage(rect.size().toSize(), QImage.Format_ARGB32)
-            image.fill(Qt.white)
-            
-            painter = QPainter(image)
-            scene.render(painter, target=QRectF(image.rect()), source=rect)
-            painter.end()
-            
-            image.save(file_path)
-            self.status_bar.showMessage(f"Map exported to {file_path}")
+
 
     def create_icon_from_text(self, text: str, color: QColor = Qt.black) -> QIcon:
         """Create a QIcon from a text character."""
@@ -951,8 +908,10 @@ class MainWindow(QMainWindow):
         # Refresh map to show changes (e.g. coordinates, diameter)
         self.map_widget.scene.update()
         # Refresh browser tree if needed (e.g. ID change)
-        # For now, just update map
-        pass
+        try:
+            self.browser_widget.refresh()
+        except Exception:
+            pass
     
     def on_browser_object_activated(self, obj_type: str, obj_id: str) -> None:
         """Handle activation from browser widget: select object in property editor and map."""
@@ -1361,20 +1320,7 @@ class MainWindow(QMainWindow):
         clipboard.setPixmap(pixmap)
         self.status_bar.showMessage("Map copied to clipboard", 3000)
                 
-    def export_map(self) -> None:
-        """Export map to image file."""
-        filename, _ = QFileDialog.getSaveFileName(
-            self, "Export Map", "", "PNG Images (*.png);;JPEG Images (*.jpg);;All Files (*.*)"
-        )
-        
-        if filename:
-            try:
-                # Grab map view as pixmap
-                pixmap = self.map_widget.grab()
-                pixmap.save(filename)
-                self.status_bar.showMessage(f"Exported map to {filename}")
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to export map:\n{str(e)}")
+
                 
     def import_scenario(self) -> None:
         """Import scenario from file."""

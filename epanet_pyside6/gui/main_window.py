@@ -7,8 +7,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QSize, QSettings, QPointF, QRectF
 from PySide6.QtGui import QAction, QKeySequence, QColor, QIcon, QPixmap, QPainter, QFont, QPolygonF, QPainterPath, QPen, QImage
+from PySide6.QtPrintSupport import QPrinter
 import sys
 import os
+from typing import Any, Optional
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -43,6 +45,9 @@ class MainWindow(QMainWindow):
         
         # Start with new project
         self.new_project()
+        
+        # Set default interaction mode
+        self.set_interaction_mode(InteractionMode.SELECT)
     
     def load_recent_files(self) -> None:
         """Load recent files from settings."""
@@ -841,7 +846,7 @@ class MainWindow(QMainWindow):
             self.view_menu.addAction(self.property_dock.toggleViewAction())
             self.view_menu.addAction(self.overview_dock.toggleViewAction())
     
-    def create_status_bar(self):
+    def create_status_bar(self) -> None:
         """Create status bar."""
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
@@ -866,7 +871,7 @@ class MainWindow(QMainWindow):
         # Initial update
         self.update_status_bar()
         
-    def update_status_bar(self):
+    def update_status_bar(self) -> None:
         """Update status bar information."""
         if not hasattr(self, 'project') or not self.project:
             return
@@ -882,15 +887,15 @@ class MainWindow(QMainWindow):
         unit_str = flow_units.name if hasattr(flow_units, 'name') else str(flow_units)
         self.units_label.setText(unit_str)
         
-    def on_mouse_moved(self, x, y):
+    def on_mouse_moved(self, x: float, y: float) -> None:
         """Handle mouse move from map widget."""
         self.coord_label.setText(f"X, Y: {x:.2f}, {y:.2f}")
     
-    def on_map_selection_changed(self, obj):
+    def on_map_selection_changed(self, obj: Any) -> None:
         """Handle selection changes in the map."""
         self.property_editor.set_object(obj)
 
-    def on_browser_object_selected(self, obj_type: str, obj_id: str):
+    def on_browser_object_selected(self, obj_type: str, obj_id: str) -> None:
         """Handle selection from browser widget: select object in property editor."""
         # Find object in network
         obj = None
@@ -906,7 +911,7 @@ class MainWindow(QMainWindow):
         if obj:
             self.property_editor.set_object(obj)
 
-    def on_property_changed(self, obj):
+    def on_property_changed(self, obj: Any) -> None:
         """Handle property changes from property editor."""
         # Refresh map to show changes (e.g. coordinates, diameter)
         self.map_widget.scene.update()
@@ -914,7 +919,7 @@ class MainWindow(QMainWindow):
         # For now, just update map
         pass
     
-    def on_browser_object_activated(self, obj_type: str, obj_id: str):
+    def on_browser_object_activated(self, obj_type: str, obj_id: str) -> None:
         """Handle activation from browser widget: select object in property editor and map."""
         try:
             if obj_type == 'Pattern':
@@ -971,7 +976,7 @@ class MainWindow(QMainWindow):
             pass
 
 
-    def on_object_added(self, category: str):
+    def on_object_added(self, category: str) -> None:
         """Handle adding new object from browser."""
         try:
             if category == "Patterns":
@@ -1007,7 +1012,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to add new {category}:\n{str(e)}")
 
-    def on_object_deleted(self, obj_type: str, obj_id: str):
+    def on_object_deleted(self, obj_type: str, obj_id: str) -> None:
         """Handle deleting object from browser."""
         reply = QMessageBox.question(
             self,
@@ -1036,7 +1041,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to delete {obj_type}:\n{str(e)}")
 
-    def on_property_object_updated(self, obj):
+    def on_property_object_updated(self, obj: Any) -> None:
         """Handle updates from property editor: refresh map visuals and browser if needed."""
         try:
             # If it's a node, update its graphic position
@@ -1071,7 +1076,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         
-    def update_title(self):
+    def update_title(self) -> None:
         """Update window title based on current project."""
         if self.project.filename:
             title = f"EPANET 2.2 - PySide6 - {os.path.basename(self.project.filename)}"
@@ -1081,7 +1086,7 @@ class MainWindow(QMainWindow):
         
     # File operations
     
-    def new_project(self):
+    def new_project(self) -> None:
         """Create new project."""
         if not self.check_save_changes():
             return
@@ -1093,7 +1098,7 @@ class MainWindow(QMainWindow):
         self.update_title()
         self.status_bar.showMessage("New project created")
     
-    def open_project(self):
+    def open_project(self) -> None:
         """Open project from file."""
         if not self.check_save_changes():
             return
@@ -1118,7 +1123,7 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to open project:\n{str(e)}")
     
-    def save_project(self):
+    def save_project(self) -> None:
         """Save current project."""
         if not self.project.filename:
             self.save_project_as()
@@ -1130,7 +1135,7 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save project:\n{str(e)}")
     
-    def save_project_as(self):
+    def save_project_as(self) -> None:
         """Save project with new filename."""
         filename, _ = QFileDialog.getSaveFileName(
             self,
@@ -1173,7 +1178,7 @@ class MainWindow(QMainWindow):
         
     # Import/Export
     
-    def import_network(self):
+    def import_network(self) -> None:
         """Import network from INP file."""
         if not self.check_save_changes():
             return
@@ -1198,7 +1203,7 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to import network:\n{str(e)}")
                 
-    def import_map(self):
+    def import_map(self) -> None:
         """Import map file."""
         filename, _ = QFileDialog.getOpenFileName(
             self, "Import Map", "", "Map Files (*.map);;EPANET Input Files (*.inp);;All Files (*.*)"
@@ -1216,7 +1221,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to import map:\n{str(e)}")
         
-    def export_network(self):
+    def export_network(self) -> None:
         """Export network to INP file."""
         filename, _ = QFileDialog.getSaveFileName(
             self, "Export Network", "", "EPANET Input Files (*.inp);;All Files (*.*)"
@@ -1233,7 +1238,7 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to export network:\n{str(e)}")
                 
-    def page_setup(self):
+    def page_setup(self) -> None:
         """Configure page setup."""
         from PySide6.QtPrintSupport import QPageSetupDialog, QPrinter
         from PySide6.QtWidgets import QDialog
@@ -1245,7 +1250,7 @@ class MainWindow(QMainWindow):
         dialog = QPageSetupDialog(self.printer, self)
         dialog.exec()
         
-    def print_preview(self):
+    def print_preview(self) -> None:
         """Show print preview."""
         from PySide6.QtPrintSupport import QPrintPreviewDialog, QPrinter
         from PySide6.QtWidgets import QDialog
@@ -1258,7 +1263,7 @@ class MainWindow(QMainWindow):
         dialog.paintRequested.connect(self._print_document)
         dialog.exec()
         
-    def print_current_view(self):
+    def print_current_view(self) -> None:
         """Print the current view."""
         from PySide6.QtPrintSupport import QPrintDialog, QPrinter
         from PySide6.QtWidgets import QDialog
@@ -1271,7 +1276,7 @@ class MainWindow(QMainWindow):
         if dialog.exec() == QDialog.Accepted:
             self._print_document(self.printer)
             
-    def _print_document(self, printer):
+    def _print_document(self, printer: QPrinter) -> None:
         """Handle printing of the current document."""
         # Check active subwindow
         active_sub = self.mdi_area.activeSubWindow()
@@ -1287,7 +1292,7 @@ class MainWindow(QMainWindow):
         self.map_widget.render(painter)
         painter.end()
         
-    def copy_current_view(self):
+    def copy_current_view(self) -> None:
         """Copy current view to clipboard."""
         from PySide6.QtGui import QGuiApplication, QImage, QPixmap
         
@@ -1311,7 +1316,7 @@ class MainWindow(QMainWindow):
         clipboard.setPixmap(pixmap)
         self.status_bar.showMessage("Map copied to clipboard", 3000)
                 
-    def export_map(self):
+    def export_map(self) -> None:
         """Export map to image file."""
         filename, _ = QFileDialog.getSaveFileName(
             self, "Export Map", "", "PNG Images (*.png);;JPEG Images (*.jpg);;All Files (*.*)"
@@ -1326,7 +1331,7 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to export map:\n{str(e)}")
                 
-    def import_scenario(self):
+    def import_scenario(self) -> None:
         """Import scenario from file."""
         filename, _ = QFileDialog.getOpenFileName(
             self, "Import Scenario", "", "EPANET Scenario (*.scn *.inp);;All Files (*)"
@@ -1347,7 +1352,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Import Failed", f"Error importing scenario: {str(e)}")
 
-    def export_scenario(self):
+    def export_scenario(self) -> None:
         """Export scenario to file."""
         filename, _ = QFileDialog.getSaveFileName(
             self, "Export Scenario", "", "EPANET Scenario (*.scn);;All Files (*)"
@@ -1370,7 +1375,7 @@ class MainWindow(QMainWindow):
     
     # Simulation
     
-    def run_simulation(self):
+    def run_simulation(self) -> None:
         """Run hydraulic and water quality simulation."""
         from gui.dialogs import SimulationStatusDialog
         from PySide6.QtWidgets import QApplication
@@ -1428,7 +1433,7 @@ class MainWindow(QMainWindow):
             
     # Views
     
-    def create_graph(self):
+    def create_graph(self) -> None:
         """Create a new graph window."""
         from gui.views import GraphView
         from gui.dialogs.graph_selection_dialog import GraphSelectionDialog
@@ -1499,7 +1504,7 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.information(self, "Graph", f"{graph_type} not implemented yet.")
         
-    def create_table(self):
+    def create_table(self) -> None:
         """Create a new table window."""
         from gui.views import TableView
         
@@ -1511,7 +1516,7 @@ class MainWindow(QMainWindow):
         subwindow.setWindowTitle("Network Table")
         subwindow.showMaximized()
         
-    def create_contour(self):
+    def create_contour(self) -> None:
         """Create a new contour window."""
         from gui.views import ContourView
         from gui.dialogs.graph_selection_dialog import GraphSelectionDialog
@@ -1533,7 +1538,7 @@ class MainWindow(QMainWindow):
                 # For now, just handle Contour
                 QMessageBox.information(self, "Contour", "Please select Contour Plot type.")
         
-    def create_status(self):
+    def create_status(self) -> None:
         """Create a new status report window."""
         from gui.views import StatusView
         
@@ -1543,7 +1548,7 @@ class MainWindow(QMainWindow):
         subwindow.setWindowTitle("Status Report")
         subwindow.showMaximized()
         
-    def create_calibration(self):
+    def create_calibration(self) -> None:
         """Create a new calibration window."""
         from gui.views import CalibrationView
         
@@ -1553,7 +1558,7 @@ class MainWindow(QMainWindow):
         subwindow.setWindowTitle("Calibration")
         subwindow.showMaximized()
         
-    def create_energy(self):
+    def create_energy(self) -> None:
         """Create a new energy report window."""
         from gui.views import EnergyView
         
@@ -1566,7 +1571,7 @@ class MainWindow(QMainWindow):
     
     # Data Editors
     
-    def edit_controls(self):
+    def edit_controls(self) -> None:
         """Open controls editor."""
         from gui.dialogs.controls_editor import ControlsEditorDialog
         dialog = ControlsEditorDialog(self.project, self)
@@ -1575,7 +1580,7 @@ class MainWindow(QMainWindow):
             self.browser_widget.refresh()
             self.status_bar.showMessage("Controls updated")
 
-    def edit_pattern(self, pattern_id: str):
+    def edit_pattern(self, pattern_id: str) -> None:
         """Open pattern editor dialog."""
         from gui.dialogs import PatternEditor
         from models import Pattern
@@ -1616,7 +1621,7 @@ class MainWindow(QMainWindow):
         dialog.pattern_updated.connect(on_pattern_updated)
         dialog.exec()
     
-    def edit_curve(self, curve_id: str):
+    def edit_curve(self, curve_id: str) -> None:
         """Open curve editor dialog."""
         from gui.dialogs import CurveEditor
         from models import Curve, CurveType
@@ -1678,7 +1683,7 @@ class MainWindow(QMainWindow):
         dialog.curve_updated.connect(on_curve_updated)
         dialog.exec()
     
-    def show_project_summary(self):
+    def show_project_summary(self) -> None:
         """Show project summary dialog."""
         from gui.dialogs.project_summary_dialog import ProjectSummaryDialog
         
@@ -1690,7 +1695,7 @@ class MainWindow(QMainWindow):
             self.project.modified = True
             self.status_bar.showMessage("Project summary updated")
 
-    def show_calibration_data(self):
+    def show_calibration_data(self) -> None:
         """Show calibration data dialog."""
         from gui.dialogs.calibration_data_dialog import CalibrationDataDialog
         
@@ -1703,7 +1708,7 @@ class MainWindow(QMainWindow):
             self.project.modified = True
             self.status_bar.showMessage("Calibration data updated")
 
-    def show_dimensions(self):
+    def show_dimensions(self) -> None:
         """Show dimensions dialog."""
         from gui.dialogs.dimensions_dialog import DimensionsDialog
         
@@ -1723,14 +1728,14 @@ class MainWindow(QMainWindow):
             
             self.status_bar.showMessage("Map dimensions updated")
 
-    def show_query(self):
+    def show_query(self) -> None:
         """Show query dialog."""
         from gui.dialogs.query_dialog import QueryDialog
         dialog = QueryDialog(self.project, self)
         dialog.query_executed.connect(self.execute_query)
         dialog.exec()
         
-    def execute_query(self, obj_type, parameter, operator, value):
+    def execute_query(self, obj_type: str, parameter: str, operator: str, value: float) -> None:
         """Execute query and highlight matching objects on map."""
         matching_ids = []
         
@@ -1748,7 +1753,7 @@ class MainWindow(QMainWindow):
         # Highlight on map
         self.map_widget.scene.highlight_query_results(obj_type, matching_ids)
         
-    def get_node_param_value(self, node, parameter):
+    def get_node_param_value(self, node: Any, parameter: str) -> Optional[float]:
         """Get node parameter value for query."""
         param_map = {
             "Elevation": "elevation",
@@ -1762,7 +1767,7 @@ class MainWindow(QMainWindow):
         attr = param_map.get(parameter)
         return getattr(node, attr, None) if attr else None
         
-    def get_link_param_value(self, link, parameter):
+    def get_link_param_value(self, link: Any, parameter: str) -> Optional[float]:
         """Get link parameter value for query."""
         param_map = {
             "Length": "length",
@@ -1775,7 +1780,7 @@ class MainWindow(QMainWindow):
         attr = param_map.get(parameter)
         return getattr(link, attr, None) if attr else None
         
-    def compare_values(self, val1, operator, val2):
+    def compare_values(self, val1: float, operator: str, val2: float) -> bool:
         """Compare values based on operator."""
         if operator == "=":
             return abs(val1 - val2) < 0.001
@@ -1791,14 +1796,14 @@ class MainWindow(QMainWindow):
             return abs(val1 - val2) >= 0.001
         return False
         
-    def show_preferences(self):
+    def show_preferences(self) -> None:
         """Show preferences dialog."""
         from gui.dialogs.preferences_dialog import PreferencesDialog
         dialog = PreferencesDialog(self)
         if dialog.exec():
             self.status_bar.showMessage("Preferences updated")
 
-    def export_network(self):
+    def export_network(self) -> None:
         """Export full network to INP file."""
         filename, _ = QFileDialog.getSaveFileName(
             self, "Export Network", "", "EPANET Input (*.inp);;All Files (*)"
@@ -1819,14 +1824,14 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", f"Error exporting network: {str(e)}")
         
-    def export_map(self):
+    def export_map(self) -> None:
         """Show export map dialog."""
         from gui.dialogs.map_export_dialog import MapExportDialog
         dialog = MapExportDialog(self.map_widget, self)
         dialog.exec()
         
 
-    def show_full_report(self):
+    def show_full_report(self) -> None:
         """Generate and show full report."""
         filepath, _ = QFileDialog.getSaveFileName(
             self,
@@ -1862,7 +1867,7 @@ class MainWindow(QMainWindow):
             )
 
 
-    def show_analysis_options(self):
+    def show_analysis_options(self) -> None:
         """Show analysis options dialog."""
         from gui.dialogs.analysis_options_dialog import AnalysisOptionsDialog
         from dataclasses import asdict
@@ -1885,7 +1890,7 @@ class MainWindow(QMainWindow):
         
         dialog.exec()
 
-    def update_analysis_options(self, new_options: dict):
+    def update_analysis_options(self, new_options: dict) -> None:
         """Update project analysis options."""
         from core.constants import FlowUnits, HeadLossType, QualityType
         
@@ -1907,7 +1912,7 @@ class MainWindow(QMainWindow):
         self.project.modified = True
         self.status_bar.showMessage("Analysis options updated")
     
-    def show_defaults(self):
+    def show_defaults(self) -> None:
         """Show project defaults dialog."""
         from gui.dialogs.defaults_dialog import DefaultsDialog
         dialog = DefaultsDialog(self.project, self)
@@ -1915,7 +1920,7 @@ class MainWindow(QMainWindow):
             self.update_status_bar()
             # Defaults are saved in the dialog's accept method
     
-    def show_map_options(self):
+    def show_map_options(self) -> None:
         """Show map options dialog."""
         from gui.dialogs.map_options_dialog import MapOptionsDialog
         dialog = MapOptionsDialog(self)
@@ -1939,9 +1944,10 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
 
-    def set_interaction_mode(self, mode: InteractionMode):
+    def set_interaction_mode(self, mode: InteractionMode) -> None:
         """Set map interaction mode."""
-        self.map_widget.set_interaction_mode(mode)
+        if hasattr(self, 'map_widget'):
+            self.map_widget.set_interaction_mode(mode)
         
         # Update UI state
         self.select_action.setChecked(mode == InteractionMode.SELECT)
@@ -1956,26 +1962,22 @@ class MainWindow(QMainWindow):
             self.add_pump_action.setChecked(mode == InteractionMode.ADD_PUMP)
             self.add_valve_action.setChecked(mode == InteractionMode.ADD_VALVE)
             self.add_label_action.setChecked(mode == InteractionMode.ADD_LABEL)
-        
-        # Update map widget
-        if hasattr(self, 'map_widget'):
-            self.map_widget.set_interaction_mode(mode)
 
     
     # View operations
     
-    def zoom_in(self):
+    def zoom_in(self) -> None:
         """Zoom in on the map."""
         self.map_widget.scale(1.2, 1.2)
         
-    def zoom_out(self):
+    def zoom_out(self) -> None:
         """Zoom out on the map."""
         self.map_widget.scale(1/1.2, 1/1.2)
         
-    def full_extent(self):
+    def full_extent(self) -> None:
         """Zoom to full network extent."""
         self.map_widget.fit_network()
-    def find_object(self):
+    def find_object(self) -> None:
         """Show find object dialog."""
         from gui.dialogs.find_object_dialog import FindObjectDialog
         dialog = FindObjectDialog(self.project, self)
@@ -1994,24 +1996,24 @@ class MainWindow(QMainWindow):
         
     # Map Visualization Handlers
     
-    def on_node_param_changed(self, param):
+    def on_node_param_changed(self, param: str) -> None:
         """Handle node parameter change."""
         self.current_node_param = param
         self._update_map_colors()
         
-    def on_link_param_changed(self, param):
+    def on_link_param_changed(self, param: str) -> None:
         """Handle link parameter change."""
         self.current_link_param = param
         self._update_map_colors()
         
-    def on_time_changed(self, time_step):
+    def on_time_changed(self, time_step: int) -> None:
         """Handle time step change."""
         self.current_time_step = time_step
         self._update_map_colors(preserve_legend=True)
         
     # _get_units_for_param removed, use core.units.get_unit_label instead
 
-    def _update_map_colors(self, preserve_legend=False):
+    def _update_map_colors(self, preserve_legend: bool = False) -> None:
         """Update map colors based on current parameters and time."""
         # Initialize current params if not set
         if not hasattr(self, 'current_node_param'): self.current_node_param = None
@@ -2202,14 +2204,14 @@ class MainWindow(QMainWindow):
             self.map_widget.link_legend.hide()
             self.map_widget.scene.update_link_colors({}, [], [])
 
-    def on_legend_updated(self):
+    def on_legend_updated(self) -> None:
         """Handle legend updates from editor."""
         # Force update map colors but preserve the new legend settings
         self._update_map_colors(preserve_legend=True)
     
     # Backdrop Handlers
     
-    def load_backdrop(self):
+    def load_backdrop(self) -> None:
         """Load backdrop image."""
         from gui.dialogs import BackdropDialog
         
@@ -2221,12 +2223,12 @@ class MainWindow(QMainWindow):
                 self.backdrop_info = (image_path, ul_x, ul_y, lr_x, lr_y)
                 self.show_backdrop_action.setChecked(True)
                 
-    def unload_backdrop(self):
+    def unload_backdrop(self) -> None:
         """Unload backdrop image."""
         self.map_widget.scene.clear_backdrop()
         self.backdrop_info = None
         
-    def align_backdrop(self):
+    def align_backdrop(self) -> None:
         """Align backdrop image."""
         if not hasattr(self, 'backdrop_info') or not self.backdrop_info:
             QMessageBox.information(self, "Backdrop", "No backdrop loaded.")
@@ -2244,13 +2246,13 @@ class MainWindow(QMainWindow):
                 self.map_widget.scene.set_backdrop(image_path, ul_x, ul_y, lr_x, lr_y)
                 self.backdrop_info = (image_path, ul_x, ul_y, lr_x, lr_y)
                 
-    def toggle_backdrop(self, checked):
+    def toggle_backdrop(self, checked: bool) -> None:
         """Toggle backdrop visibility."""
         self.map_widget.scene.toggle_backdrop(checked)
 
     # Help
     
-    def show_about(self):
+    def show_about(self) -> None:
         """Show about dialog."""
         try:
             version = self.project.get_version()
@@ -2268,7 +2270,7 @@ class MainWindow(QMainWindow):
     
     # Settings
     
-    def restore_settings(self):
+    def restore_settings(self) -> None:
         """Restore window settings."""
         geometry = self.settings.value("geometry")
         if geometry:
@@ -2308,20 +2310,20 @@ class MainWindow(QMainWindow):
                 'pipe_diameter': '300', 'pipe_roughness': '100'
             }
     
-    def save_settings(self):
+    def save_settings(self) -> None:
         """Save window settings."""
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("windowState", self.saveState())
         
     # Edit Actions
     
-    def select_all(self):
+    def select_all(self) -> None:
         """Select all items in the map."""
         if self.map_widget and self.map_widget.scene:
             for item in self.map_widget.scene.items():
                 item.setSelected(True)
                 
-    def group_edit(self):
+    def group_edit(self) -> None:
         """Open group edit dialog."""
         from gui.dialogs.group_edit_dialog import GroupEditDialog
         
@@ -2336,7 +2338,7 @@ class MainWindow(QMainWindow):
             data = dialog.get_data()
             self.apply_group_edit(data, selected_items)
             
-    def apply_group_edit(self, data, selected_items):
+    def apply_group_edit(self, data: dict, selected_items: list) -> None:
         """Apply group edit changes."""
         obj_type = data['type']
         prop = data['property']
@@ -2406,7 +2408,7 @@ class MainWindow(QMainWindow):
         else:
             self.status_bar.showMessage("No objects updated.")
     
-    def closeEvent(self, event):
+    def closeEvent(self, event: Any) -> None:
         """Handle window close event."""
         if self.check_save_changes():
             self.save_settings()

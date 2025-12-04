@@ -73,8 +73,6 @@ class MapWidget(QGraphicsView):
         elif mode == InteractionMode.SELECT:
             self.setDragMode(QGraphicsView.RubberBandDrag)
             self.setCursor(Qt.ArrowCursor)
-            self.setDragMode(QGraphicsView.NoDrag)
-            self.setCursor(Qt.CrossCursor)
             
         # Handle ghost item
         self._update_ghost_item()

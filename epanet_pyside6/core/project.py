@@ -14,8 +14,8 @@ class EPANETProject:
     
     def __init__(self) -> None:
         """Initialize project."""
-        self.engine = Engine()
         self.network = Network()
+        self.engine = Engine()
         self.filename = ""
         self.modified = False
         self._has_results = False

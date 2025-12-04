@@ -1,7 +1,7 @@
 """Map widget for displaying and editing the network."""
 
 from enum import Enum, auto
-from PySide6.QtWidgets import QGraphicsView, QMenu, QGraphicsLineItem, QGraphicsPathItem, QInputDialog, QMessageBox
+from PySide6.QtWidgets import QGraphicsView, QMenu, QGraphicsLineItem, QGraphicsPathItem, QInputDialog, QMessageBox, QGraphicsItem
 from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QPainter, QPen, QColor, QPainterPath
 from gui.graphics.scene import NetworkScene
@@ -18,6 +18,7 @@ class InteractionMode(Enum):
     ADD_PUMP = auto()
     ADD_VALVE = auto()
     ADD_LABEL = auto()
+    ALIGN_BACKDROP = auto()
 
 class MapWidget(QGraphicsView):
     """Interactive map widget."""
@@ -25,6 +26,8 @@ class MapWidget(QGraphicsView):
     options_requested = Signal() # Forward signal from legend
     mouseMoved = Signal(float, float) # Emits x, y coordinates
     network_changed = Signal() # Emitted when network structure changes
+    alignment_finished = Signal(bool) # Emitted when backdrop alignment is finished (True=Confirm, False=Cancel)
+    backdrop_action_requested = Signal(str) # Emitted for backdrop actions: 'load', 'align', 'unload'
     
     def __init__(self, project, parent=None):
         super().__init__(parent)
@@ -62,6 +65,11 @@ class MapWidget(QGraphicsView):
         # Ghost item for preview
         self.ghost_item = None
         
+        # Backdrop alignment state
+        self.initial_backdrop_state = None
+        self.backdrop_drag_start_pos = None
+        self.backdrop_item_start_pos = None
+        
     def set_interaction_mode(self, mode: InteractionMode):
         """Set interaction mode (select, pan, add_junction, etc.)."""
         self.interaction_mode = mode
@@ -73,6 +81,21 @@ class MapWidget(QGraphicsView):
         elif mode == InteractionMode.SELECT:
             self.setDragMode(QGraphicsView.RubberBandDrag)
             self.setCursor(Qt.ArrowCursor)
+        elif mode == InteractionMode.ALIGN_BACKDROP:
+            self.setDragMode(QGraphicsView.NoDrag)
+            self.setCursor(Qt.SizeAllCursor)
+            
+        # Update backdrop movability
+        if self.scene.backdrop_item:
+            is_align = (mode == InteractionMode.ALIGN_BACKDROP)
+            self.scene.backdrop_item.setFlag(QGraphicsItem.ItemIsMovable, is_align)
+            self.scene.backdrop_item.setFlag(QGraphicsItem.ItemIsSelectable, is_align)
+            
+            if is_align:
+                # Store initial state for cancellation
+                self.initial_backdrop_state = (self.scene.backdrop_item.pos(), self.scene.backdrop_item.scale())
+            else:
+                self.initial_backdrop_state = None
             
         # Handle ghost item
         self._update_ghost_item()
@@ -140,6 +163,13 @@ class MapWidget(QGraphicsView):
         return best_item
 
     def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.interaction_mode == InteractionMode.ALIGN_BACKDROP:
+            if self.scene.backdrop_item:
+                self.backdrop_drag_start_pos = self.mapToScene(event.pos())
+                self.backdrop_item_start_pos = self.scene.backdrop_item.pos()
+                self.setCursor(Qt.ClosedHandCursor)
+                return
+
         if event.button() == Qt.LeftButton and self.interaction_mode != InteractionMode.SELECT and self.interaction_mode != InteractionMode.PAN:
             pos = self.mapToScene(event.pos())
             
@@ -284,6 +314,20 @@ class MapWidget(QGraphicsView):
 
     def keyPressEvent(self, event):
         """Handle key press events."""
+        if self.interaction_mode == InteractionMode.ALIGN_BACKDROP:
+            if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+                # Confirm
+                self.alignment_finished.emit(True)
+                return
+            elif event.key() == Qt.Key_Escape:
+                # Cancel
+                if self.initial_backdrop_state and self.scene.backdrop_item:
+                    pos, scale = self.initial_backdrop_state
+                    self.scene.backdrop_item.setPos(pos)
+                    self.scene.backdrop_item.setScale(scale)
+                self.alignment_finished.emit(False)
+                return
+                
         if event.key() == Qt.Key_Delete or event.key() == Qt.Key_Backspace:
             self.delete_selected_items()
         else:
@@ -330,12 +374,29 @@ class MapWidget(QGraphicsView):
             self.scene.update()
             self.network_changed.emit()
 
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release events."""
+        if self.interaction_mode == InteractionMode.ALIGN_BACKDROP and self.backdrop_drag_start_pos:
+            self.backdrop_drag_start_pos = None
+            self.backdrop_item_start_pos = None
+            self.setCursor(Qt.SizeAllCursor)
+            return
+            
+        super().mouseReleaseEvent(event)
+
     def mouseMoveEvent(self, event):
         pos = self.mapToScene(event.pos())
         
         # Emit logical coordinates (Y is flipped)
         self.mouseMoved.emit(pos.x(), -pos.y())
         
+        # Handle Backdrop Dragging
+        if self.interaction_mode == InteractionMode.ALIGN_BACKDROP and self.backdrop_drag_start_pos and self.scene.backdrop_item:
+            delta = pos - self.backdrop_drag_start_pos
+            new_pos = self.backdrop_item_start_pos + delta
+            self.scene.backdrop_item.setPos(new_pos)
+            return
+
         # Update ghost position
         if self.ghost_item:
             self.ghost_item.setPos(pos)
@@ -476,6 +537,18 @@ class MapWidget(QGraphicsView):
 
     def wheelEvent(self, event):
         """Handle zoom with mouse wheel."""
+        if self.interaction_mode == InteractionMode.ALIGN_BACKDROP and self.scene.backdrop_item:
+            # Scale backdrop instead of view
+            zoom_in = event.angleDelta().y() > 0
+            factor = 1.05 if zoom_in else 0.95
+            
+            # Scale around mouse position?
+            # QGraphicsItem doesn't have easy scale-around-point.
+            # But we can just scale it.
+            self.scene.backdrop_item.setScale(self.scene.backdrop_item.scale() * factor)
+            event.accept()
+            return
+
         zoom_in = event.angleDelta().y() > 0
         factor = 1.1 if zoom_in else 0.9
         self.scale(factor, factor)
@@ -500,6 +573,44 @@ class MapWidget(QGraphicsView):
         
         # Check for item under mouse using fuzzy check
         item = self.get_item_at(event.pos())
+        
+        # Backdrop Alignment Mode
+        if self.interaction_mode == InteractionMode.ALIGN_BACKDROP:
+            confirm_action = menu.addAction("Confirm Alignment")
+            confirm_action.triggered.connect(lambda: self.alignment_finished.emit(True))
+            confirm_action.setShortcut("Enter")
+            
+            cancel_action = menu.addAction("Cancel Alignment")
+            cancel_action.triggered.connect(lambda: self.alignment_finished.emit(False))
+            cancel_action.setShortcut("Esc")
+            
+            menu.exec(event.globalPos())
+            return
+            
+        # General Menu (Empty space)
+        if not item:
+            # Add Node/Link submenus could go here
+            
+            # Backdrop Menu
+            backdrop_menu = menu.addMenu("Backdrop")
+            
+            load_action = backdrop_menu.addAction("Load...")
+            load_action.triggered.connect(lambda: self.backdrop_action_requested.emit('load'))
+            
+            align_action = backdrop_menu.addAction("Align")
+            align_action.triggered.connect(lambda: self.backdrop_action_requested.emit('align'))
+            if not self.scene.backdrop_item:
+                align_action.setEnabled(False)
+                
+            unload_action = backdrop_menu.addAction("Unload")
+            unload_action.triggered.connect(lambda: self.backdrop_action_requested.emit('unload'))
+            if not self.scene.backdrop_item:
+                unload_action.setEnabled(False)
+            
+            menu.addSeparator()
+            
+            menu.exec(event.globalPos())
+            return
         
         # Object Actions
         if item and (hasattr(item, 'node') or hasattr(item, 'link') or hasattr(item, 'label') or hasattr(item, 'link_item')):

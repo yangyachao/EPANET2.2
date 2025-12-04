@@ -114,6 +114,16 @@ class MainWindow(QMainWindow):
             self.property_editor.set_object(None)
             
             self.map_widget.scene.load_network()
+            
+            # Load backdrop if present
+            if hasattr(self.project, 'backdrop_info') and self.project.backdrop_info:
+                image_path, ul_x, ul_y, lr_x, lr_y = self.project.backdrop_info
+                self.map_widget.scene.set_backdrop(image_path, ul_x, ul_y, lr_x, lr_y)
+                self.show_backdrop_action.setChecked(True)
+            else:
+                self.map_widget.scene.clear_backdrop()
+                self.show_backdrop_action.setChecked(False)
+            
             self.map_widget.scene.update_scene_rect()
             self.map_widget.fit_network()
             
@@ -142,6 +152,8 @@ class MainWindow(QMainWindow):
         self.map_widget.scene.selectionChanged.connect(self.on_map_selection_changed)
         self.map_widget.options_requested.connect(self.on_legend_updated)
         self.map_widget.mouseMoved.connect(self.on_mouse_moved)
+        self.map_widget.alignment_finished.connect(self.on_alignment_finished)
+        self.map_widget.backdrop_action_requested.connect(self.on_backdrop_action)
         self.map_subwindow = self.mdi_area.addSubWindow(self.map_widget)
         self.map_subwindow.setWindowTitle("Network Map")
         self.map_subwindow.showMaximized()
@@ -836,8 +848,29 @@ class MainWindow(QMainWindow):
         self.overview_dock.setWidget(self.overview_map)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.overview_dock)
         
-
+        # Backdrop Toolbar
+        self.backdrop_toolbar = QToolBar("Backdrop", self)
+        self.backdrop_toolbar.setObjectName("BackdropToolbar")
+        self.addToolBar(Qt.TopToolBarArea, self.backdrop_toolbar)
         
+        load_backdrop_action = QAction(QIcon(), "Load Backdrop", self)
+        load_backdrop_action.setToolTip("Load Backdrop Image")
+        load_backdrop_action.triggered.connect(self.load_backdrop)
+        self.backdrop_toolbar.addAction(load_backdrop_action)
+        
+        align_backdrop_action = QAction(QIcon(), "Align Backdrop", self)
+        align_backdrop_action.setToolTip("Align Backdrop Image")
+        align_backdrop_action.triggered.connect(self.align_backdrop)
+        self.backdrop_toolbar.addAction(align_backdrop_action)
+        
+        self.show_backdrop_action.setIcon(QIcon()) # Add icon if available
+        self.show_backdrop_action.setToolTip("Toggle Backdrop Visibility")
+        self.backdrop_toolbar.addAction(self.show_backdrop_action)
+        
+        unload_backdrop_action = QAction(QIcon(), "Unload Backdrop", self)
+        unload_backdrop_action.setToolTip("Unload Backdrop Image")
+        unload_backdrop_action.triggered.connect(self.unload_backdrop)
+        self.backdrop_toolbar.addAction(unload_backdrop_action)
         
         # Add toggle actions to View menu
         if hasattr(self, 'view_menu'):
@@ -1113,6 +1146,16 @@ class MainWindow(QMainWindow):
                 self.browser_widget.refresh()
                 self.property_editor.set_object(None)
                 self.map_widget.scene.load_network()
+                
+                # Load backdrop if present
+                if hasattr(self.project, 'backdrop_info') and self.project.backdrop_info:
+                    image_path, ul_x, ul_y, lr_x, lr_y = self.project.backdrop_info
+                    self.map_widget.scene.set_backdrop(image_path, ul_x, ul_y, lr_x, lr_y)
+                    self.show_backdrop_action.setChecked(True)
+                else:
+                    self.map_widget.scene.clear_backdrop()
+                    self.show_backdrop_action.setChecked(False)
+                
                 self.map_widget.fit_network()
                 self.update_title()
                 self.status_bar.showMessage(f"Opened {filename}")
@@ -1946,6 +1989,53 @@ class MainWindow(QMainWindow):
 
     def set_interaction_mode(self, mode: InteractionMode) -> None:
         """Set map interaction mode."""
+        # Check if leaving ALIGN_BACKDROP mode
+        if hasattr(self, 'map_widget') and self.map_widget.interaction_mode == InteractionMode.ALIGN_BACKDROP:
+            # Save new backdrop coordinates
+            if self.map_widget.scene.backdrop_item:
+                item = self.map_widget.scene.backdrop_item
+                pos = item.pos()
+                scale = item.scale()
+                
+                # Calculate new world coordinates
+                # Original image size (unscaled)
+                pixmap = item.pixmap()
+                img_w = pixmap.width()
+                img_h = pixmap.height()
+                
+                # Current size in scene coords
+                current_w = img_w * scale
+                current_h = img_h * scale
+                
+                # Scene coords
+                scene_ul_x = pos.x()
+                scene_ul_y = pos.y()
+                
+                # Convert back to World coords
+                # scene_x = ul_x - offset_x
+                # scene_y = -(ul_y - offset_y)
+                
+                # ul_x = scene_x + offset_x
+                # ul_y = -scene_y + offset_y
+                
+                offset_x = self.map_widget.scene.offset_x
+                offset_y = self.map_widget.scene.offset_y
+                
+                ul_x = scene_ul_x + offset_x
+                ul_y = -scene_ul_y + offset_y
+                
+                # lr_x = ul_x + width
+                # lr_y = ul_y - height
+                
+                lr_x = ul_x + current_w
+                lr_y = ul_y - current_h
+                
+                # Update project info
+                if self.project.backdrop_info:
+                    image_path = self.project.backdrop_info[0]
+                    self.project.backdrop_info = (image_path, ul_x, ul_y, lr_x, lr_y)
+                    self.project.modified = True
+        
         if hasattr(self, 'map_widget'):
             self.map_widget.set_interaction_mode(mode)
         
@@ -2216,36 +2306,108 @@ class MainWindow(QMainWindow):
         from gui.dialogs import BackdropDialog
         
         dialog = BackdropDialog(self.project, self)
+        
+        # Set default coordinates to current view extent
+        # This ensures the backdrop is placed in the visible area
+        rect = self.map_widget.scene.sceneRect()
+        ul_x = rect.left()
+        ul_y = rect.top() # Scene Y is inverted? No, scene coords are standard Cartesian usually, but let's check.
+        # In EPANET/Scene: Y grows upwards? 
+        # Actually, let's look at how set_backdrop uses them.
+        # set_backdrop: world_h = abs(ul_y - lr_y)
+        # It expects world coordinates.
+        
+        # Scene rect is in scene coordinates (which are world coordinates with offset)
+        # But wait, scene.sceneRect() might be huge or empty.
+        # Better to use the bounding box of all items or the current view.
+        
+        # Let's use the bounding rect of all nodes
+        min_x = float('inf')
+        min_y = float('inf')
+        max_x = float('-inf')
+        max_y = float('-inf')
+        
+        has_nodes = False
+        for node in self.project.network.nodes.values():
+            has_nodes = True
+            min_x = min(min_x, node.x)
+            min_y = min(min_y, node.y)
+            max_x = max(max_x, node.x)
+            max_y = max(max_y, node.y)
+            
+        if has_nodes:
+            # Add some padding
+            w = max_x - min_x
+            h = max_y - min_y
+            if w == 0: w = 100
+            if h == 0: h = 100
+            
+            ul_x = min_x - w * 0.1
+            ul_y = max_y + h * 0.1 # Upper Left Y (higher value)
+            lr_x = max_x + w * 0.1
+            lr_y = min_y - h * 0.1 # Lower Right Y (lower value)
+        else:
+            ul_x = 0.0
+            ul_y = 1000.0
+            lr_x = 1000.0
+            lr_y = 0.0
+            
+        # If we already have a backdrop, use its coords?
+        # No, load_backdrop implies loading a NEW one usually.
+        # But if we are just opening the dialog, maybe we should show current if exists?
+        # The dialog is empty by default.
+        
+        dialog.set_data("", ul_x, ul_y, lr_x, lr_y)
         if dialog.exec():
             image_path, ul_x, ul_y, lr_x, lr_y = dialog.get_data()
             if image_path:
                 self.map_widget.scene.set_backdrop(image_path, ul_x, ul_y, lr_x, lr_y)
-                self.backdrop_info = (image_path, ul_x, ul_y, lr_x, lr_y)
+                self.project.backdrop_info = (image_path, ul_x, ul_y, lr_x, lr_y)
                 self.show_backdrop_action.setChecked(True)
+                self.project.modified = True
                 
     def unload_backdrop(self) -> None:
         """Unload backdrop image."""
         self.map_widget.scene.clear_backdrop()
-        self.backdrop_info = None
+        self.project.backdrop_info = None
+        self.project.modified = True
         
     def align_backdrop(self) -> None:
-        """Align backdrop image."""
-        if not hasattr(self, 'backdrop_info') or not self.backdrop_info:
+        """Align backdrop image interactively."""
+        if not hasattr(self.project, 'backdrop_info') or not self.project.backdrop_info:
             QMessageBox.information(self, "Backdrop", "No backdrop loaded.")
             return
             
-        from gui.dialogs import BackdropDialog
+        # Switch to Align Mode
+        self.set_interaction_mode(InteractionMode.ALIGN_BACKDROP)
         
-        dialog = BackdropDialog(self.project, self)
-        image_path, ul_x, ul_y, lr_x, lr_y = self.backdrop_info
-        dialog.set_data(image_path, ul_x, ul_y, lr_x, lr_y)
-        
-        if dialog.exec():
-            image_path, ul_x, ul_y, lr_x, lr_y = dialog.get_data()
-            if image_path:
-                self.map_widget.scene.set_backdrop(image_path, ul_x, ul_y, lr_x, lr_y)
-                self.backdrop_info = (image_path, ul_x, ul_y, lr_x, lr_y)
+        QMessageBox.information(self, "Align Backdrop", 
+            "Backdrop Alignment Mode:\n\n"
+            "- Drag the backdrop to move it.\n"
+            "- Scroll mouse wheel to scale it.\n\n"
+            "Switch to 'Select' or any other tool to finish and save.")
                 
+    def on_alignment_finished(self, confirmed: bool) -> None:
+        """Handle backdrop alignment completion."""
+        if confirmed:
+            self.status_bar.showMessage("Backdrop alignment confirmed.")
+        else:
+            self.status_bar.showMessage("Backdrop alignment cancelled.")
+            
+        # Switch back to Select mode
+        # This will trigger the save logic in set_interaction_mode if confirmed
+        # If cancelled, the map widget has already restored the position, so saving the "current" position is fine (it's the old one)
+        self.set_interaction_mode(InteractionMode.SELECT)
+
+    def on_backdrop_action(self, action: str) -> None:
+        """Handle backdrop actions from map widget."""
+        if action == 'load':
+            self.load_backdrop()
+        elif action == 'align':
+            self.align_backdrop()
+        elif action == 'unload':
+            self.unload_backdrop()
+
     def toggle_backdrop(self, checked: bool) -> None:
         """Toggle backdrop visibility."""
         self.map_widget.scene.toggle_backdrop(checked)

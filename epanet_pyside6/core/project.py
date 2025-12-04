@@ -20,6 +20,7 @@ class EPANETProject:
         self.modified = False
         self._has_results = False
         self.last_report = "No simulation run yet."
+        self.backdrop_info = None
         
         # Default Properties and Prefixes
         self.default_properties = {}
@@ -119,6 +120,11 @@ class EPANETProject:
         try:
             self.engine.open_project(filename)
             self._load_network_from_wntr()
+            
+            # Load backdrop info
+            from core.epanet_io import load_backdrop_info
+            self.backdrop_info = load_backdrop_info(filename)
+            
             self.filename = filename
             self.modified = False
             self._has_results = False

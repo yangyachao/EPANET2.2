@@ -236,9 +236,6 @@ def import_scenario(project, filepath: str):
                         if 'rule_buffer' in locals() and rule_buffer:
                             from models.control import Rule
                             rule_obj = Rule.from_string("\n".join(rule_buffer))
-                            if rule_obj:
-                                network.rules.append(rule_obj)
-                        
                         rule_buffer = [line]
                     else:
                         if 'rule_buffer' in locals():
@@ -380,6 +377,34 @@ def export_network(project, filepath: str):
                 new_content = content[:insert_pos] + controls_text + content[insert_pos:]
             else:
                 new_content = content + controls_text + "\n[END]\n"
+            
+            # Append Backdrop if exists
+            if hasattr(project, 'backdrop_info') and project.backdrop_info:
+                image_path, ul_x, ul_y, lr_x, lr_y = project.backdrop_info
+                
+                # Convert back to EPANET format
+                # ul_x = llx
+                # ul_y = ury
+                # lr_x = urx
+                # lr_y = lly
+                
+                llx = ul_x
+                lly = lr_y
+                urx = lr_x
+                ury = ul_y
+                
+                backdrop_text = "\n[BACKDROP]\n"
+                backdrop_text += f" DIMENSIONS {llx} {lly} {urx} {ury}\n"
+                backdrop_text += " UNITS None\n" # Default to None for now
+                backdrop_text += f" FILE \"{image_path}\"\n"
+                backdrop_text += " OFFSET 0.0 0.0\n"
+                
+                # Insert before [END] or append
+                end_pos = new_content.find("[END]")
+                if end_pos != -1:
+                    new_content = new_content[:end_pos] + backdrop_text + new_content[end_pos:]
+                else:
+                    new_content += backdrop_text + "\n[END]\n"
                 
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(new_content)
@@ -399,4 +424,77 @@ def export_network(project, filepath: str):
             raise e
     else:
         raise RuntimeError("No WNTR network model available to export.")
+
+
+def load_backdrop_info(filepath: str):
+    """Load backdrop information from INP file.
+    
+    Returns:
+        tuple: (image_path, ul_x, ul_y, lr_x, lr_y) or None
+    """
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            
+        in_backdrop = False
+        dims = None
+        units = None
+        file = None
+        offset = None
+        
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith(';'):
+                continue
+                
+            if line.startswith('['):
+                if line.upper() == '[BACKDROP]':
+                    in_backdrop = True
+                else:
+                    in_backdrop = False
+                continue
+                
+            if in_backdrop:
+                parts = line.split()
+                if not parts: continue
+                
+                key = parts[0].upper()
+                
+                if key == 'DIMENSIONS':
+                    # DIMENSIONS llx lly urx ury
+                    if len(parts) >= 5:
+                        dims = [float(x) for x in parts[1:5]]
+                elif key == 'UNITS':
+                    if len(parts) >= 2:
+                        units = parts[1]
+                elif key == 'FILE':
+                    # FILE "filename"
+                    # Handle quotes
+                    if '"' in line:
+                        parts_quote = line.split('"', 2)
+                        if len(parts_quote) > 1:
+                            file = parts_quote[1]
+                    elif len(parts) > 1:
+                        file = parts[1]
+                elif key == 'OFFSET':
+                    # OFFSET x y
+                    if len(parts) >= 3:
+                        offset = [float(x) for x in parts[1:3]]
+                        
+        if file and dims:
+            # EPANET stores: llx, lly, urx, ury
+            # We need: image_path, ul_x, ul_y, lr_x, lr_y
+            # ul_x = llx
+            # ul_y = ury
+            # lr_x = urx
+            # lr_y = lly
+            
+            llx, lly, urx, ury = dims
+            
+            return (file, llx, ury, urx, lly)
+            
+    except Exception as e:
+        print(f"Error loading backdrop info: {e}")
+        
+    return None
 

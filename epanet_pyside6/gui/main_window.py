@@ -852,6 +852,7 @@ class MainWindow(QMainWindow):
         # Backdrop Toolbar
         self.backdrop_toolbar = QToolBar("Backdrop", self)
         self.backdrop_toolbar.setObjectName("BackdropToolbar")
+        self.backdrop_toolbar.setIconSize(QSize(24, 24))
         self.addToolBar(Qt.TopToolBarArea, self.backdrop_toolbar)
         
         load_backdrop_action = QAction(self.load_icon("backdrop_load.svg"), "Load Backdrop", self)

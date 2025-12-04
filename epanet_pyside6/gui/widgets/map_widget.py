@@ -24,6 +24,7 @@ class MapWidget(QGraphicsView):
     
     options_requested = Signal() # Forward signal from legend
     mouseMoved = Signal(float, float) # Emits x, y coordinates
+    network_changed = Signal() # Emitted when network structure changes
     
     def __init__(self, project, parent=None):
         super().__init__(parent)
@@ -115,6 +116,7 @@ class MapWidget(QGraphicsView):
                             
                             # Refresh scene
                             self.scene.update_scene_rect()
+                            self.network_changed.emit()
                 else:
                     # Clicked on empty space while drawing? Cancel? Or ignore?
                     # If start node is set, user might want to cancel by clicking empty space
@@ -140,6 +142,7 @@ class MapWidget(QGraphicsView):
             
             if node_id:
                 self.scene.add_node(node_id)
+                self.network_changed.emit()
             
             # Adding Label
             if self.interaction_mode == InteractionMode.ADD_LABEL:
@@ -149,6 +152,7 @@ class MapWidget(QGraphicsView):
                     logical_y = -pos.y()
                     label_id = self.project.add_label(text, pos.x(), logical_y)
                     self.scene.add_label(label_id)
+                    self.network_changed.emit()
             
             # Refresh scene
             self.scene.update_scene_rect()
@@ -202,6 +206,7 @@ class MapWidget(QGraphicsView):
             
             # Refresh scene to clean up any artifacts
             self.scene.update()
+            self.network_changed.emit()
 
     def mouseMoveEvent(self, event):
         pos = self.mapToScene(event.pos())

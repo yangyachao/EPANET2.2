@@ -1,6 +1,6 @@
 """Property editor widget."""
 
-from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QPushButton, QHeaderView, QWidget, QHBoxLayout, QLineEdit, QToolButton
+from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QPushButton, QHeaderView, QWidget, QHBoxLayout, QLineEdit, QToolButton, QComboBox
 from PySide6.QtCore import Qt, Signal
 from core.project import EPANETProject
 from core.units import get_unit_label
@@ -123,9 +123,22 @@ class PropertyEditor(QTableWidget):
         self.add_property(f"Diameter{self.u('diameter')}", f"{(self.current_object.diameter or 0.0):.2f}")
         self.add_property(f"Min Volume{self.u('volume')}", f"{(self.current_object.min_volume or 0.0):.2f}")
         self.add_editable_action_property("Volume Curve", self.current_object.volume_curve or "", "...", lambda: self.edit_curve("Volume Curve"))
-        self.add_property("Mixing Model", str(self.current_object.mixing_model.name))
+        self.add_editable_action_property("Volume Curve", self.current_object.volume_curve or "", "...", lambda: self.edit_curve("Volume Curve"))
+        
+        # Mixing Model
+        models = ['MIX1', 'MIX2', 'FIFO', 'LIFO']
+        self.add_combo_property("Mixing Model", str(self.current_object.mixing_model.name), models,
+                              lambda val: self.update_property("Mixing Model", val))
+        
         self.add_property("Mixing Fraction", f"{(self.current_object.mixing_fraction or 0.0):.2f}")
         self.add_property("Reaction Coeff.", f"{(self.current_object.bulk_coeff or 0.0):.2f}")
+        
+        # Can Overflow
+        overflow_opts = ['Yes', 'No']
+        current_overflow = 'Yes' if self.current_object.can_overflow else 'No'
+        self.add_combo_property("Can Overflow", current_overflow, overflow_opts,
+                              lambda val: self.update_property("Can Overflow", val))
+        
         self.add_property("Initial Quality", f"{(self.current_object.init_quality or 0.0):.2f}")
         self.add_action_property("Source Quality", "...", self.edit_source_quality)
         
@@ -142,7 +155,13 @@ class PropertyEditor(QTableWidget):
         self.add_property(f"Diameter{self.u('diameter')}", f"{(self.current_object.diameter or 0.0):.2f}")
         self.add_property("Roughness", f"{(self.current_object.roughness or 0.0):.2f}")
         self.add_property("Loss Coeff.", f"{(self.current_object.minor_loss or 0.0):.2f}")
-        self.add_property("Initial Status", str(self.current_object.status.name))
+        self.add_property("Loss Coeff.", f"{(self.current_object.minor_loss or 0.0):.2f}")
+        
+        # Initial Status
+        statuses = ['OPEN', 'CLOSED', 'CV']
+        self.add_combo_property("Initial Status", str(self.current_object.status.name), statuses,
+                              lambda val: self.update_property("Initial Status", val))
+        
         self.add_property("Bulk Coeff.", f"{(self.current_object.bulk_coeff or 0.0):.2f}")
         self.add_property("Wall Coeff.", f"{(self.current_object.wall_coeff or 0.0):.2f}")
         self.add_property("Check Valve", "Yes" if self.current_object.has_check_valve else "No")
@@ -160,7 +179,14 @@ class PropertyEditor(QTableWidget):
         self.add_property("Power", f"{(self.current_object.power or 0.0):.2f}")
         self.add_property("Speed", f"{(self.current_object.speed or 0.0):.2f}")
         self.add_editable_action_property("Pattern", self.current_object.speed_pattern or "", "...", lambda: self.edit_pattern("Pattern"))
-        self.add_property("Initial Status", str(self.current_object.status.name))
+        self.add_property("Speed", f"{(self.current_object.speed or 0.0):.2f}")
+        self.add_editable_action_property("Pattern", self.current_object.speed_pattern or "", "...", lambda: self.edit_pattern("Pattern"))
+        
+        # Initial Status
+        statuses = ['OPEN', 'CLOSED']
+        self.add_combo_property("Initial Status", str(self.current_object.status.name), statuses,
+                              lambda val: self.update_property("Initial Status", val))
+        
         self.add_editable_action_property("Efficiency Curve", self.current_object.efficiency_curve or "", "...", lambda: self.edit_curve("Efficiency Curve"))
         self.add_property("Energy Price", f"{(self.current_object.energy_price or 0.0):.4f}")
         self.add_editable_action_property("Price Pattern", self.current_object.price_pattern or "", "...", lambda: self.edit_pattern("Price Pattern"))
@@ -171,13 +197,25 @@ class PropertyEditor(QTableWidget):
 
     def _add_valve_properties(self):
         self.add_property("ID", self.current_object.id, editable=False)
-        self.add_property("Type", str(self.current_object.link_type.name), editable=False)
+        
+        # Valve Type Combo
+        types = ['PRV', 'PSV', 'PBV', 'FCV', 'TCV', 'GPV']
+        self.add_combo_property("Type", str(self.current_object.link_type.name), types, 
+                              lambda val: self.update_property("Type", val))
+        
         self.add_property("From Node", self.current_object.from_node)
         self.add_property("To Node", self.current_object.to_node)
         self.add_property(f"Diameter{self.u('diameter')}", f"{(self.current_object.diameter or 0.0):.2f}")
         self.add_property("Setting", f"{(self.current_object.valve_setting or 0.0):.2f}")
         self.add_property("Loss Coeff.", f"{(self.current_object.minor_loss or 0.0):.2f}")
-        self.add_property("Fixed Status", str(self.current_object.fixed_status.name) if hasattr(self.current_object, 'fixed_status') else "OPEN")
+        self.add_property("Setting", f"{(self.current_object.valve_setting or 0.0):.2f}")
+        self.add_property("Loss Coeff.", f"{(self.current_object.minor_loss or 0.0):.2f}")
+        
+        # Fixed Status
+        statuses = ['OPEN', 'CLOSED']
+        current_fixed = str(self.current_object.fixed_status.name) if hasattr(self.current_object, 'fixed_status') else "OPEN"
+        self.add_combo_property("Fixed Status", current_fixed, statuses,
+                              lambda val: self.update_property("Fixed Status", val))
         
         if self.project.has_results():
             self.add_property(f"Flow (Result){self.u('flow')}", f"{(self.current_object.flow or 0.0):.2f}", editable=False)
@@ -253,6 +291,25 @@ class PropertyEditor(QTableWidget):
         layout.addWidget(button)
         
         self.setCellWidget(row, 1, widget)
+
+    def add_combo_property(self, name: str, value: str, options: list, callback):
+        """Add a property with a combo box."""
+        row = self.rowCount()
+        self.insertRow(row)
+        
+        # Property name
+        name_item = QTableWidgetItem(name)
+        name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+        self.setItem(row, 0, name_item)
+        
+        # Combo Box
+        combo = QComboBox()
+        combo.addItems(options)
+        combo.setCurrentText(value)
+        # Connect signal
+        combo.currentTextChanged.connect(lambda text: self.on_custom_widget_changed(row, text))
+        
+        self.setCellWidget(row, 1, combo)
         
     def on_custom_widget_changed(self, row, value):
         """Handle changes from custom widgets."""
@@ -367,10 +424,18 @@ class PropertyEditor(QTableWidget):
             self.current_object.min_volume = float(value)
         elif name == "Volume Curve":
             self.current_object.volume_curve = value
+        elif name == "Mixing Model":
+            from core.constants import MixingModel
+            try:
+                self.current_object.mixing_model = MixingModel[value]
+            except KeyError:
+                pass
         elif name == "Mixing Fraction":
             self.current_object.mixing_fraction = float(value)
         elif name == "Reaction Coeff.":
             self.current_object.bulk_coeff = float(value)
+        elif name == "Can Overflow":
+            self.current_object.can_overflow = (value == 'Yes')
         elif name == "Initial Quality":
             self.current_object.init_quality = float(value)
 
@@ -383,6 +448,12 @@ class PropertyEditor(QTableWidget):
             self.current_object.roughness = float(value)
         elif name == "Loss Coeff.":
             self.current_object.minor_loss = float(value)
+        elif name == "Initial Status":
+            from core.constants import LinkStatus
+            try:
+                self.current_object.status = LinkStatus[value]
+            except KeyError:
+                pass
         elif name == "Bulk Coeff.":
             self.current_object.bulk_coeff = float(value)
         elif name == "Wall Coeff.":
@@ -399,6 +470,12 @@ class PropertyEditor(QTableWidget):
             self.current_object.pump_curve = value
         elif name == "Pattern":
             self.current_object.speed_pattern = value
+        elif name == "Initial Status":
+            from core.constants import LinkStatus
+            try:
+                self.current_object.status = LinkStatus[value]
+            except KeyError:
+                pass
         elif name == "Efficiency Curve":
             self.current_object.efficiency_curve = value
         elif name == "Energy Price":
@@ -407,12 +484,27 @@ class PropertyEditor(QTableWidget):
             self.current_object.price_pattern = value
 
     def _update_valve_property(self, name, value):
-        if name == "Diameter":
+        if name == "Type":
+            from core.constants import LinkType
+            try:
+                # Convert string to Enum
+                new_type = LinkType[value]
+                self.current_object.valve_type = new_type
+                self.current_object.link_type = new_type
+            except KeyError:
+                pass
+        elif name == "Diameter":
             self.current_object.diameter = float(value)
         elif name == "Setting":
             self.current_object.valve_setting = float(value)
         elif name == "Loss Coeff.":
             self.current_object.minor_loss = float(value)
+        elif name == "Fixed Status":
+            from core.constants import LinkStatus
+            try:
+                self.current_object.fixed_status = LinkStatus[value]
+            except KeyError:
+                pass
 
     def _update_label_property(self, name, value):
         if name == "Text":

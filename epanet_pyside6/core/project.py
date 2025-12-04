@@ -1344,7 +1344,7 @@ class EPANETProject:
             
         elif link_type == 'Valve':
             diam = float(defaults.get('pipe_diameter', 300)) # Use pipe diameter default for valve?
-            link = Valve(link_id, LinkType.PRV, from_node, to_node, diameter=diam)
+            link = Valve(id=link_id, from_node=from_node, to_node=to_node, diameter=diam, valve_type=LinkType.PRV)
             
         else:
             raise ValueError(f"Unknown link type: {link_type}")

@@ -801,6 +801,10 @@ class MainWindow(QMainWindow):
         self.browser_widget.map_browser.link_parameter_changed.connect(self.on_link_param_changed)
         self.browser_widget.map_browser.time_changed.connect(self.on_time_changed)
         
+        # Connect map signals
+        if hasattr(self, 'map_widget'):
+            self.map_widget.network_changed.connect(self.browser_widget.refresh)
+        
         self.browser_dock.setWidget(self.browser_widget)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.browser_dock)
         

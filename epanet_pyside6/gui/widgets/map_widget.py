@@ -114,6 +114,33 @@ class MapWidget(QGraphicsView):
                 pos = self.mapToScene(self.mapFromGlobal(self.cursor().pos()))
                 self.ghost_item.setPos(pos.x(), pos.y())
             
+    def get_item_at(self, pos):
+        """Get item at position with fuzzy tolerance."""
+        # Use a small rectangle for hit testing (10x10 pixels)
+        # pos is in view coordinates
+        x = int(pos.x()) - 5
+        y = int(pos.y()) - 5
+        items = self.items(x, y, 10, 10)
+        # print(f"DEBUG: get_item_at pos={pos}, rect=({x},{y},10,10), items={len(items)}")
+        
+        # Filter and prioritize items
+        # Priority: VertexHandle -> Node -> Link -> Label
+        best_item = None
+        best_prio = -1
+        
+        for item in items:
+            prio = 0
+            if hasattr(item, 'link_item'): prio = 4 # VertexHandle
+            elif hasattr(item, 'node'): prio = 3
+            elif hasattr(item, 'link'): prio = 2
+            elif hasattr(item, 'label'): prio = 1
+            
+            if prio > best_prio:
+                best_prio = prio
+                best_item = item
+                
+        return best_item
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.interaction_mode != InteractionMode.SELECT and self.interaction_mode != InteractionMode.PAN:
             pos = self.mapToScene(event.pos())
@@ -216,6 +243,44 @@ class MapWidget(QGraphicsView):
             # Refresh scene
             self.scene.update_scene_rect()
             return
+
+        # Handle selection in SELECT mode if direct click missed
+        if event.button() == Qt.LeftButton and self.interaction_mode == InteractionMode.SELECT:
+            # Check if we hit something directly first (standard behavior)
+            item = self.scene.itemAt(self.mapToScene(event.pos()), self.transform())
+            
+            if not item:
+                # Try fuzzy check
+                item = self.get_item_at(event.pos())
+                if item:
+                    # Manually select it
+                    # Handle modifiers (Ctrl for toggle/add)
+                    modifiers = event.modifiers()
+                    if modifiers & Qt.ControlModifier:
+                        item.setSelected(not item.isSelected())
+                    else:
+                        self.scene.clearSelection()
+                        item.setSelected(True)
+                        
+                    # If it's a VertexHandle, we need to manually trigger its press event?
+                    # Or just selecting it is enough?
+                    # If we select it, the user can then drag it?
+                    # Dragging requires mousePress to be consumed by the item.
+                    # If we are here, it means standard itemAt failed, so the view didn't send the event to the item.
+                    # We need to forward the event to the item!
+                    
+                    # Map event to item coords
+                    scene_pos = self.mapToScene(event.pos())
+                    item_pos = item.mapFromScene(scene_pos)
+                    
+                    # Create new event for item
+                    # We can't easily create a QGraphicsSceneMouseEvent here.
+                    # But we can call mousePressEvent directly if it's a QGraphicsItem.
+                    # However, dragging relies on the scene's internal state (mouseGrabber).
+                    
+                    # Alternative: We can't easily force drag if the view didn't pick it up.
+                    # But at least we selected it.
+                    pass
 
         super().mousePressEvent(event)
 
@@ -429,8 +494,8 @@ class MapWidget(QGraphicsView):
         """Show context menu on right-click."""
         menu = QMenu(self)
         
-        # Check for item under mouse
-        item = self.scene.itemAt(self.mapToScene(event.pos()), self.transform())
+        # Check for item under mouse using fuzzy check
+        item = self.get_item_at(event.pos())
         
         # Object Actions
         if item and (hasattr(item, 'node') or hasattr(item, 'link') or hasattr(item, 'label') or hasattr(item, 'link_item')):

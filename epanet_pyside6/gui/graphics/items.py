@@ -264,45 +264,38 @@ class VertexHandleItem(QGraphicsRectItem):
 
 class LinkItem(QGraphicsPathItem):
     """Base class for link graphics items."""
-    
-    def __init__(self, link, from_pos, to_pos):
+    def __init__(self, link, from_pos, to_pos, offset=(0, 0)):
         super().__init__()
         self.link = link
         self.from_pos = from_pos
         self.to_pos = to_pos
-        
-        # Cosmetic pen - fixed pixel width
-        self.normal_pen = QPen(Qt.gray, 1, Qt.SolidLine, Qt.RoundCap)
-        self.normal_pen.setCosmetic(True)
+        self.offset = offset # (off_x, off_y)
         
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         self.setAcceptHoverEvents(True)
         
-        # Text labels
-        self.id_label = QGraphicsSimpleTextItem(self.link.id, self)
+        # Pen setup
+        self.normal_pen = QPen(QColor(100, 100, 100), 1)
+        self.normal_pen.setCosmetic(True)
+        self.setPen(self.normal_pen)
+        
+        self.handles = []
+        
+        # Create ID label
+        self.id_label = QGraphicsSimpleTextItem(link.id, self)
         self.id_label.setBrush(QBrush(Qt.black))
         self.id_label.setFont(QFont("Arial", 8))
         self.id_label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
-        self.id_label.setVisible(False)
+        self.id_label.setVisible(False) # Hidden by default
         
-        self.value_label = QGraphicsSimpleTextItem("", self)
-        self.value_label.setBrush(QBrush(Qt.black))
+        # Create Value label (placeholder)
+        self.value_label = QGraphicsSimpleTextItem("0.00", self)
+        self.value_label.setBrush(QBrush(Qt.blue))
         self.value_label.setFont(QFont("Arial", 8))
         self.value_label.setFlag(QGraphicsItem.ItemIgnoresTransformations)
         self.value_label.setVisible(False)
         
         self.update_path()
-        
-        self.setPen(self.normal_pen)
-        self.setToolTip(f"{link.id}\nType: {link.link_type.name}")
-        
-        self.update_path()
-        
-        self.setPen(self.normal_pen)
-        self.setToolTip(f"{link.id}\nType: {link.link_type.name}")
-        
-        self.handles = []
-        self.update_label_positions()
 
     def show_handles(self):
         """Show vertex editing handles."""
@@ -500,6 +493,22 @@ class LinkItem(QGraphicsPathItem):
         
         # Add vertices if present
         if hasattr(self.link, 'vertices') and self.link.vertices:
+            off_x, off_y = self.offset
+            for vx, vy in self.link.vertices:
+                # Vertices are in logical coordinates (EPANET Y up)
+                # Convert to scene coordinates (Qt Y down) with offset
+                path.lineTo(vx - off_x, -(vy - off_y))
+                
+        path.lineTo(self.to_pos)
+        self.setPath(path)
+        self.update_label_positions()
+
+    def update_path(self):
+        path = QPainterPath()
+        path.moveTo(self.from_pos)
+        
+        # Add vertices if present
+        if hasattr(self.link, 'vertices') and self.link.vertices:
             for vx, vy in self.link.vertices:
                 # Vertices are in logical coordinates (EPANET Y up)
                 # Convert to scene coordinates (Qt Y down)
@@ -509,25 +518,18 @@ class LinkItem(QGraphicsPathItem):
         self.setPath(path)
         self.update_label_positions()
 
-    def shape(self):
-        """Override shape to increase hit area."""
-        path = self.path()
-        stroker = QPainterPathStroker()
-        stroker.setWidth(10) # 10 pixel hit area
-        return stroker.createStroke(path)
-
 class PipeItem(LinkItem):
     """Graphics item for Pipe."""
-    def __init__(self, link, from_pos, to_pos):
-        super().__init__(link, from_pos, to_pos)
+    def __init__(self, link, from_pos, to_pos, offset=(0, 0)):
+        super().__init__(link, from_pos, to_pos, offset)
         self.normal_pen = QPen(Qt.darkGray, 1)
         self.normal_pen.setCosmetic(True)
         self.setPen(self.normal_pen)
 
 class PumpItem(LinkItem):
     """Graphics item for Pump."""
-    def __init__(self, link, from_pos, to_pos):
-        super().__init__(link, from_pos, to_pos)
+    def __init__(self, link, from_pos, to_pos, offset=(0, 0)):
+        super().__init__(link, from_pos, to_pos, offset)
         self.normal_pen = QPen(QColor(255, 140, 0), 2)  # Thicker for pumps
         self.normal_pen.setCosmetic(True)
         self.setPen(self.normal_pen)
@@ -548,8 +550,8 @@ class PumpItem(LinkItem):
 
 class ValveItem(LinkItem):
     """Graphics item for Valve."""
-    def __init__(self, link, from_pos, to_pos):
-        super().__init__(link, from_pos, to_pos)
+    def __init__(self, link, from_pos, to_pos, offset=(0, 0)):
+        super().__init__(link, from_pos, to_pos, offset)
         self.normal_pen = QPen(QColor(220, 20, 60), 2)  # Thicker for valves
         self.normal_pen.setCosmetic(True)
         self.setPen(self.normal_pen)

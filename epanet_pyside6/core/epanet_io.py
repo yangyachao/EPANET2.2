@@ -36,7 +36,14 @@ def export_scenario(project, filepath: str):
                 # Base demand
                 if node.base_demand != 0 or node.demand_pattern:
                     f.write(f" {node.id:<16}\t{node.base_demand:<12}\t{node.demand_pattern or '':<16}\n")
-                # TODO: Handle multiple demand categories if supported in data model
+                
+                # Multiple demand categories
+                if hasattr(node, 'demands'):
+                    for demand in node.demands:
+                        base = demand.get('base_demand', 0.0)
+                        pat = demand.get('pattern', '')
+                        cat = demand.get('name', '')
+                        f.write(f" {node.id:<16}\t{base:<12}\t{pat:<16}\t{cat}\n")
         f.write("\n")
         
         # Quality (Initial Quality)
@@ -64,13 +71,13 @@ def export_scenario(project, filepath: str):
         # Controls
         f.write("[CONTROLS]\n")
         for control in network.controls:
-            f.write(f"{str(control)}\n")
+            f.write(f"{control.to_string()}\n")
         f.write("\n")
         
         # Rules
         f.write("[RULES]\n")
         for rule in network.rules:
-            f.write(f"{str(rule)}\n")
+            f.write(f"{rule.to_string()}\n")
         f.write("\n")
         
         # Energy
@@ -83,7 +90,12 @@ def export_scenario(project, filepath: str):
         for link in network.links.values():
             if link.link_type.name == 'PUMP':
                 # Check for pump specific energy settings
-                pass # TODO: Add pump energy settings if stored in model
+                if hasattr(link, 'energy_price') and link.energy_price:
+                    f.write(f" PUMP {link.id} PRICE {link.energy_price}\n")
+                if hasattr(link, 'price_pattern') and link.price_pattern:
+                    f.write(f" PUMP {link.id} PATTERN {link.price_pattern}\n")
+                if hasattr(link, 'efficiency_curve') and link.efficiency_curve:
+                    f.write(f" PUMP {link.id} EFFICIENCY {link.efficiency_curve}\n")
         f.write("\n")
         
         # Options
@@ -152,6 +164,14 @@ def import_scenario(project, filepath: str):
                 continue
                 
             if line.startswith('['):
+                # Flush rule buffer if we were in RULES section
+                if current_section == "RULES" and 'rule_buffer' in locals() and rule_buffer:
+                    from models.control import Rule
+                    rule_obj = Rule.from_string("\n".join(rule_buffer))
+                    if rule_obj:
+                        network.rules.append(rule_obj)
+                    rule_buffer = []
+                    
                 current_section = line[1:-1].upper()
                 continue
                 
@@ -200,11 +220,33 @@ def import_scenario(project, filepath: str):
                     # We'll handle clearing at the start of import if we see the section.
                     # For now, just append, but we should probably clear existing controls if we are importing a scenario.
                     # Let's assume the user wants to replace controls.
-                    pass # TODO: Implement control parsing. It's complex text.
+                    # Controls
+                    # Format: LINK <linkid> <status> IF NODE <nodeid> <operator> <value>
+                    # We use SimpleControl.from_string
+                    from models.control import SimpleControl
+                    control = SimpleControl.from_string(line)
+                    if control:
+                        network.controls.append(control)
                     
                 elif current_section == "RULES":
-                    pass # TODO: Implement rule parsing.
+                    # Rules are multi-line. We need to accumulate them.
                     
+                    if line.upper().startswith("RULE"):
+                        # If we have a pending rule, parse it
+                        if 'rule_buffer' in locals() and rule_buffer:
+                            from models.control import Rule
+                            rule_obj = Rule.from_string("\n".join(rule_buffer))
+                            if rule_obj:
+                                network.rules.append(rule_obj)
+                        
+                        rule_buffer = [line]
+                    else:
+                        if 'rule_buffer' in locals():
+                            rule_buffer.append(line)
+                        else:
+                            # Start of rules section without RULE keyword? Unlikely but possible comments
+                            pass
+                            
                 elif current_section == "ENERGY":
                     # Global or Pump specific
                     keyword = tokens[0].upper()
@@ -271,6 +313,13 @@ def import_scenario(project, filepath: str):
             except Exception as e:
                 print(f"Error parsing line '{line}' in section {current_section}: {e}")
                 continue
+                
+        # Flush rule buffer if we ended in RULES section
+        if current_section == "RULES" and 'rule_buffer' in locals() and rule_buffer:
+            from models.control import Rule
+            rule_obj = Rule.from_string("\n".join(rule_buffer))
+            if rule_obj:
+                network.rules.append(rule_obj)
     
     # Note: Controls and Rules parsing is non-trivial and skipped for this simplified implementation.
     # In a full implementation, we would need a robust parser for these.

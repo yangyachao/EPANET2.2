@@ -18,6 +18,8 @@ class NetworkScene(QGraphicsScene):
         self.link_items = {}
         self.backdrop_item = None
         self.max_y = 0
+        self.offset_x = 0.0
+        self.offset_y = 0.0
         
         # Set scene background
         self.setBackgroundBrush(QBrush(Qt.white))
@@ -46,6 +48,12 @@ class NetworkScene(QGraphicsScene):
         # Convert to Qt coordinates (Y flipped)
         # EPANET: min_y (bottom) to max_y (top)
         # Qt: -max_y (top) to -min_y (bottom)
+        
+        # Apply offsets
+        min_x -= self.offset_x
+        max_x -= self.offset_x
+        min_y -= self.offset_y
+        max_y -= self.offset_y
         
         qt_min_y = -max_y
         qt_max_y = -min_y
@@ -84,7 +92,14 @@ class NetworkScene(QGraphicsScene):
         
         network = self.project.network
         
-        network = self.project.network
+        # Calculate offsets based on map bounds
+        bounds = network.map_bounds
+        self.offset_x = bounds.get('min_x', 0.0)
+        self.offset_y = bounds.get('min_y', 0.0)
+        
+        # Handle infinite bounds
+        if self.offset_x == float('inf'): self.offset_x = 0.0
+        if self.offset_y == float('inf'): self.offset_y = 0.0
         
         # Add Nodes (with Y-axis flipping handled in Item)
         if network.nodes:
@@ -97,6 +112,13 @@ class NetworkScene(QGraphicsScene):
                     item = TankItem(node)
                 else:
                     continue
+                
+                # Apply offset
+                # Scene X = Logical X - Offset X
+                # Scene Y = -(Logical Y - Offset Y)
+                x = node.x - self.offset_x
+                y = -(node.y - self.offset_y)
+                item.setPos(x, y)
                     
                 self.addItem(item)
                 self.node_items[node.id] = item
@@ -109,12 +131,14 @@ class NetworkScene(QGraphicsScene):
             from_pos = self.node_items[link.from_node].pos()
             to_pos = self.node_items[link.to_node].pos()
             
+            offset = (self.offset_x, self.offset_y)
+            
             if link.link_type == LinkType.PIPE:
-                item = PipeItem(link, from_pos, to_pos)
+                item = PipeItem(link, from_pos, to_pos, offset)
             elif link.link_type == LinkType.PUMP:
-                item = PumpItem(link, from_pos, to_pos)
+                item = PumpItem(link, from_pos, to_pos, offset)
             else: # Valve
-                item = ValveItem(link, from_pos, to_pos)
+                item = ValveItem(link, from_pos, to_pos, offset)
                 
             self.addItem(item)
             self.link_items[link.id] = item
@@ -129,6 +153,10 @@ class NetworkScene(QGraphicsScene):
         if hasattr(network, 'labels'):
             for label in network.labels.values():
                 item = LabelItem(label)
+                # Apply offset
+                x = label.x - self.offset_x
+                y = -(label.y - self.offset_y)
+                item.setPos(x, y)
                 self.addItem(item)
                 
         self.update_scene_rect()
@@ -153,6 +181,11 @@ class NetworkScene(QGraphicsScene):
         else:
             return
             
+        # Apply offset
+        x = node.x - self.offset_x
+        y = -(node.y - self.offset_y)
+        item.setPos(x, y)
+        
         self.addItem(item)
         self.node_items[node.id] = item
         item.setZValue(1)
@@ -170,12 +203,14 @@ class NetworkScene(QGraphicsScene):
         from_pos = self.node_items[link.from_node].pos()
         to_pos = self.node_items[link.to_node].pos()
         
+        offset = (self.offset_x, self.offset_y)
+        
         if link.link_type == LinkType.PIPE:
-            item = PipeItem(link, from_pos, to_pos)
+            item = PipeItem(link, from_pos, to_pos, offset)
         elif link.link_type == LinkType.PUMP:
-            item = PumpItem(link, from_pos, to_pos)
+            item = PumpItem(link, from_pos, to_pos, offset)
         else: # Valve
-            item = ValveItem(link, from_pos, to_pos)
+            item = ValveItem(link, from_pos, to_pos, offset)
             
         self.addItem(item)
         self.link_items[link.id] = item
@@ -188,6 +223,10 @@ class NetworkScene(QGraphicsScene):
             
         label = self.project.network.labels[label_id]
         item = LabelItem(label)
+        # Apply offset
+        x = label.x - self.offset_x
+        y = -(label.y - self.offset_y)
+        item.setPos(x, y)
         self.addItem(item)
 
     def update_connected_links(self, node_id):

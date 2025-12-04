@@ -2,7 +2,7 @@
 
 from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsItem, QGraphicsDropShadowEffect, QGraphicsSimpleTextItem
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPainter, QFont, QTransform
+from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPainter, QFont, QTransform, QPolygonF
 
 class NodeItem(QGraphicsEllipseItem):
     """Base class for node graphics items.
@@ -155,17 +155,51 @@ class ReservoirItem(NodeItem):
     """Graphics item for Reservoir."""
     
     def __init__(self, node):
-        super().__init__(node, radius=5.0)
+        super().__init__(node, radius=6.0)
         self.normal_color = QColor(0, 200, 0)  # Green
         self.setBrush(QBrush(self.normal_color))
+
+    def paint(self, painter, option, widget):
+        """Draw square for reservoir."""
+        r = self.radius
+        rect = QRectF(-r, -r, r*2, r*2)
+        
+        painter.setPen(self.pen())
+        painter.setBrush(self.brush())
+        painter.drawRect(rect)
+        
+    def shape(self):
+        path = QPainterPath()
+        r = self.radius
+        path.addRect(-r, -r, r*2, r*2)
+        return path
 
 class TankItem(NodeItem):
     """Graphics item for Tank."""
     
     def __init__(self, node):
-        super().__init__(node, radius=4.0)
+        super().__init__(node, radius=5.0)
         self.normal_color = QColor(255, 200, 0)  # Brighter yellow
         self.setBrush(QBrush(self.normal_color))
+
+    def paint(self, painter, option, widget):
+        """Draw symbol for tank."""
+        r = self.radius
+        # Draw a "U" shape or just a rectangle/cylinder
+        rect = QRectF(-r, -r*1.2, r*2, r*2.4)
+        
+        painter.setPen(self.pen())
+        painter.setBrush(self.brush())
+        painter.drawRect(rect)
+        
+        # Draw top line to make it look like a tank?
+        # painter.drawLine(-r, -r*1.2, r, -r*1.2)
+        
+    def shape(self):
+        path = QPainterPath()
+        r = self.radius
+        path.addRect(-r, -r*1.2, r*2, r*2.4)
+        return path
 
 class LinkItem(QGraphicsPathItem):
     """Base class for link graphics items."""
@@ -308,6 +342,20 @@ class PumpItem(LinkItem):
         self.normal_pen = QPen(QColor(255, 140, 0), 2)  # Thicker for pumps
         self.normal_pen.setCosmetic(True)
         self.setPen(self.normal_pen)
+        
+        self.symbol = PumpSymbolItem(self)
+        self.update_symbol_position()
+        
+    def update_path(self):
+        super().update_path()
+        if hasattr(self, 'symbol'):
+            self.update_symbol_position()
+            
+    def update_symbol_position(self):
+        path = self.path()
+        if path.elementCount() > 0:
+            mid = path.pointAtPercent(0.5)
+            self.symbol.setPos(mid)
 
 class ValveItem(LinkItem):
     """Graphics item for Valve."""
@@ -316,6 +364,72 @@ class ValveItem(LinkItem):
         self.normal_pen = QPen(QColor(220, 20, 60), 2)  # Thicker for valves
         self.normal_pen.setCosmetic(True)
         self.setPen(self.normal_pen)
+        
+        self.symbol = ValveSymbolItem(self)
+        self.update_symbol_position()
+        
+    def update_path(self):
+        super().update_path()
+        if hasattr(self, 'symbol'):
+            self.update_symbol_position()
+            
+    def update_symbol_position(self):
+        path = self.path()
+        if path.elementCount() > 0:
+            mid = path.pointAtPercent(0.5)
+            self.symbol.setPos(mid)
+
+class PumpSymbolItem(QGraphicsItem):
+    """Symbol for Pump."""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        self.radius = 6.0
+        
+    def boundingRect(self):
+        r = self.radius
+        return QRectF(-r, -r, r*2, r*2)
+        
+    def paint(self, painter, option, widget):
+        r = self.radius
+        painter.setPen(QPen(Qt.black, 1))
+        painter.setBrush(QBrush(Qt.white))
+        painter.drawEllipse(QPointF(0,0), r, r)
+        
+        # Draw triangle
+        painter.setBrush(QBrush(Qt.black))
+        triangle = QPolygonF([
+            QPointF(-r/2, r/2),
+            QPointF(r/2, r/2),
+            QPointF(0, -r/2)
+        ])
+        painter.drawPolygon(triangle)
+
+class ValveSymbolItem(QGraphicsItem):
+    """Symbol for Valve."""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        self.radius = 6.0
+        
+    def boundingRect(self):
+        r = self.radius
+        return QRectF(-r, -r, r*2, r*2)
+        
+    def paint(self, painter, option, widget):
+        r = self.radius
+        painter.setPen(QPen(Qt.black, 1))
+        painter.setBrush(QBrush(Qt.white))
+        
+        # Draw bowtie
+        path = QPainterPath()
+        path.moveTo(-r, -r/2)
+        path.lineTo(r, r/2)
+        path.lineTo(r, -r/2)
+        path.lineTo(-r, r/2)
+        path.closeSubpath()
+        
+        painter.drawPath(path)
 
 class LabelItem(QGraphicsSimpleTextItem):
     """Graphics item for Map Labels."""

@@ -57,6 +57,9 @@ class MapWidget(QGraphicsView):
         
         self.interaction_mode = InteractionMode.SELECT
         
+        # Ghost item for preview
+        self.ghost_item = None
+        
     def set_interaction_mode(self, mode: InteractionMode):
         """Set interaction mode (select, pan, add_junction, etc.)."""
         self.interaction_mode = mode
@@ -68,9 +71,46 @@ class MapWidget(QGraphicsView):
         elif mode == InteractionMode.SELECT:
             self.setDragMode(QGraphicsView.RubberBandDrag)
             self.setCursor(Qt.ArrowCursor)
-        else:
             self.setDragMode(QGraphicsView.NoDrag)
             self.setCursor(Qt.CrossCursor)
+            
+        # Handle ghost item
+        self._update_ghost_item()
+        
+    def _update_ghost_item(self):
+        """Update ghost item based on interaction mode."""
+        # Remove existing ghost
+        if self.ghost_item:
+            self.scene.removeItem(self.ghost_item)
+            self.ghost_item = None
+            
+        # Create new ghost if in add node mode
+        if self.interaction_mode in [InteractionMode.ADD_JUNCTION, InteractionMode.ADD_RESERVOIR, InteractionMode.ADD_TANK]:
+            from gui.graphics.items import JunctionItem, ReservoirItem, TankItem
+            from models.node import Junction, Reservoir, Tank
+            
+            # Create dummy node for visualization
+            dummy_id = "Ghost"
+            
+            if self.interaction_mode == InteractionMode.ADD_JUNCTION:
+                node = Junction(dummy_id)
+                self.ghost_item = JunctionItem(node)
+            elif self.interaction_mode == InteractionMode.ADD_RESERVOIR:
+                node = Reservoir(dummy_id)
+                self.ghost_item = ReservoirItem(node)
+            elif self.interaction_mode == InteractionMode.ADD_TANK:
+                node = Tank(dummy_id)
+                self.ghost_item = TankItem(node)
+                
+            if self.ghost_item:
+                self.ghost_item.setOpacity(0.5) # Semi-transparent
+                self.ghost_item.setZValue(100) # On top
+                self.scene.addItem(self.ghost_item)
+                # Position at mouse cursor (will be updated in mouseMove)
+                # We need last mouse pos? Or just wait for move.
+                # Ideally, set at current mouse pos if available.
+                pos = self.mapToScene(self.mapFromGlobal(self.cursor().pos()))
+                self.ghost_item.setPos(pos.x(), pos.y())
             
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.interaction_mode != InteractionMode.SELECT and self.interaction_mode != InteractionMode.PAN:
@@ -213,6 +253,10 @@ class MapWidget(QGraphicsView):
         
         # Emit logical coordinates (Y is flipped)
         self.mouseMoved.emit(pos.x(), -pos.y())
+        
+        # Update ghost position
+        if self.ghost_item:
+            self.ghost_item.setPos(pos)
         
         # Snapping logic for link drawing
         if self.interaction_mode in [InteractionMode.ADD_PIPE, InteractionMode.ADD_PUMP, InteractionMode.ADD_VALVE]:

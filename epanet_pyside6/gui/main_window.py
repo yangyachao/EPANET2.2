@@ -154,6 +154,7 @@ class MainWindow(QMainWindow):
         self.map_widget.mouseMoved.connect(self.on_mouse_moved)
         self.map_widget.alignment_finished.connect(self.on_alignment_finished)
         self.map_widget.backdrop_action_requested.connect(self.on_backdrop_action)
+        self.map_widget.map_options_requested.connect(self.show_map_options)
         self.map_subwindow = self.mdi_area.addSubWindow(self.map_widget)
         self.map_subwindow.setWindowTitle("Network Map")
         self.map_subwindow.showMaximized()

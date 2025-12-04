@@ -3,7 +3,7 @@
 from enum import Enum, auto
 from PySide6.QtWidgets import QGraphicsView, QMenu, QGraphicsLineItem, QGraphicsPathItem, QInputDialog, QMessageBox, QGraphicsItem
 from PySide6.QtCore import Qt, QRectF, Signal
-from PySide6.QtGui import QPainter, QPen, QColor, QPainterPath
+from PySide6.QtGui import QPainter, QPen, QColor, QPainterPath, QIcon
 from gui.graphics.scene import NetworkScene
 from gui.graphics.items import NodeItem
 from .legend_widget import LegendWidget
@@ -28,6 +28,7 @@ class MapWidget(QGraphicsView):
     network_changed = Signal() # Emitted when network structure changes
     alignment_finished = Signal(bool) # Emitted when backdrop alignment is finished (True=Confirm, False=Cancel)
     backdrop_action_requested = Signal(str) # Emitted for backdrop actions: 'load', 'align', 'unload'
+    map_options_requested = Signal() # Emitted when map options dialog is requested
     
     def __init__(self, project, parent=None):
         super().__init__(parent)
@@ -587,31 +588,6 @@ class MapWidget(QGraphicsView):
             menu.exec(event.globalPos())
             return
             
-        # General Menu (Empty space)
-        if not item:
-            # Add Node/Link submenus could go here
-            
-            # Backdrop Menu
-            backdrop_menu = menu.addMenu("Backdrop")
-            
-            load_action = backdrop_menu.addAction("Load...")
-            load_action.triggered.connect(lambda: self.backdrop_action_requested.emit('load'))
-            
-            align_action = backdrop_menu.addAction("Align")
-            align_action.triggered.connect(lambda: self.backdrop_action_requested.emit('align'))
-            if not self.scene.backdrop_item:
-                align_action.setEnabled(False)
-                
-            unload_action = backdrop_menu.addAction("Unload")
-            unload_action.triggered.connect(lambda: self.backdrop_action_requested.emit('unload'))
-            if not self.scene.backdrop_item:
-                unload_action.setEnabled(False)
-            
-            menu.addSeparator()
-            
-            menu.exec(event.globalPos())
-            return
-        
         # Object Actions
         if item and (hasattr(item, 'node') or hasattr(item, 'link') or hasattr(item, 'label') or hasattr(item, 'link_item')):
             # Select it if not already selected
@@ -619,12 +595,9 @@ class MapWidget(QGraphicsView):
                 self.scene.clearSelection()
                 item.setSelected(True)
                 
-            props_action = menu.addAction("Properties")
-            props_action.triggered.connect(lambda: self.selectionChanged.emit(
-                item.node if hasattr(item, 'node') else 
-                item.link if hasattr(item, 'link') else 
-                item.label
-            ))
+            # Properties action (Selection already triggers update, so just a placeholder or focus)
+            # props_action = menu.addAction("Properties")
+            # props_action.triggered.connect(...) 
             
             delete_action = menu.addAction("Delete")
             delete_action.triggered.connect(self.delete_selected_items)
@@ -643,9 +616,33 @@ class MapWidget(QGraphicsView):
             
             menu.addSeparator()
             
+        else:
+            # General Menu (Empty space / Backdrop)
+            
+            # Backdrop Menu
+            backdrop_menu = menu.addMenu("Backdrop")
+            
+            load_action = backdrop_menu.addAction("Load...")
+            load_action.triggered.connect(lambda: self.backdrop_action_requested.emit('load'))
+            
+            align_action = backdrop_menu.addAction("Align")
+            align_action.triggered.connect(lambda: self.backdrop_action_requested.emit('align'))
+            if not self.scene.backdrop_item:
+                align_action.setEnabled(False)
+                
+            unload_action = backdrop_menu.addAction("Unload")
+            unload_action.triggered.connect(lambda: self.backdrop_action_requested.emit('unload'))
+            if not self.scene.backdrop_item:
+                unload_action.setEnabled(False)
+            
+            menu.addSeparator()
+
+        # Common Actions (Map Options, Zoom, Fit)
+        
         # Map Options action
-        options_action = menu.addAction("⚙️ Map Options...")
-        options_action.triggered.connect(self._show_map_options)
+        options_action = menu.addAction("Map Options...")
+        options_action.setIcon(QIcon()) # Add icon if available
+        options_action.triggered.connect(lambda: self.map_options_requested.emit())
         
         menu.addSeparator()
         
@@ -659,14 +656,7 @@ class MapWidget(QGraphicsView):
         fit_action = menu.addAction("📐 Fit to Window")
         fit_action.triggered.connect(self.fit_network)
         
-        menu.exec_(event.globalPos())
-    
-    def _show_map_options(self):
-        """Show map options dialog (called from context menu)."""
-        # Get main window and call its show_map_options method
-        main_window = self.window()
-        if hasattr(main_window, 'show_map_options'):
-            main_window.show_map_options()
+        menu.exec(event.globalPos())
 
     def zoom_to_object(self, obj_type, obj_id):
         """Zoom to and highlight a specific object."""

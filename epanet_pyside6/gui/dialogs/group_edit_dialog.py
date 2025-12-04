@@ -97,6 +97,30 @@ class GroupEditDialog(QDialog):
         val_layout.addWidget(self.val_input)
         layout.addLayout(val_layout)
         
+        # Filter
+        filter_group = QGroupBox("With")
+        filter_layout = QHBoxLayout()
+        
+        self.filter_chk = QCheckBox("Filter by:")
+        self.filter_chk.stateChanged.connect(self.toggle_filter)
+        filter_layout.addWidget(self.filter_chk)
+        
+        self.filter_prop_combo = QComboBox()
+        self.filter_prop_combo.setEnabled(False)
+        filter_layout.addWidget(self.filter_prop_combo)
+        
+        self.filter_rel_combo = QComboBox()
+        self.filter_rel_combo.addItems(["=", "<", ">", "<=", ">=", "<>"])
+        self.filter_rel_combo.setEnabled(False)
+        filter_layout.addWidget(self.filter_rel_combo)
+        
+        self.filter_val_input = QLineEdit()
+        self.filter_val_input.setEnabled(False)
+        filter_layout.addWidget(self.filter_val_input)
+        
+        filter_group.setLayout(filter_layout)
+        layout.addWidget(filter_group)
+        
         # Buttons
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self.accept)
@@ -109,6 +133,7 @@ class GroupEditDialog(QDialog):
     def update_properties(self, obj_type):
         """Update available properties based on object type."""
         self.prop_combo.clear()
+        self.filter_prop_combo.clear()
         
         common_props = ["Tag"]
         node_props = ["Elevation", "Base Demand", "Initial Quality"]
@@ -132,6 +157,7 @@ class GroupEditDialog(QDialog):
             props = common_props + valve_props
             
         self.prop_combo.addItems(props)
+        self.filter_prop_combo.addItems(props)
         
     def update_operation_visibility(self, prop):
         """Enable/disable operations based on property."""
@@ -144,11 +170,28 @@ class GroupEditDialog(QDialog):
             self.op_multiply.setEnabled(True)
             self.op_add.setEnabled(True)
             
+    def toggle_filter(self, state):
+        """Enable/disable filter inputs."""
+        enabled = state == Qt.Checked
+        self.filter_prop_combo.setEnabled(enabled)
+        self.filter_rel_combo.setEnabled(enabled)
+        self.filter_val_input.setEnabled(enabled)
+
     def get_data(self):
         """Get dialog data."""
-        return {
+        data = {
             "type": self.type_combo.currentText(),
             "property": self.prop_combo.currentText(),
             "operation": "Replace" if self.op_replace.isChecked() else ("Multiply" if self.op_multiply.isChecked() else "Add"),
-            "value": self.val_input.text()
+            "value": self.val_input.text(),
+            "filter": None
         }
+        
+        if self.filter_chk.isChecked():
+            data["filter"] = {
+                "property": self.filter_prop_combo.currentText(),
+                "relation": self.filter_rel_combo.currentText(),
+                "value": self.filter_val_input.text()
+            }
+            
+        return data

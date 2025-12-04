@@ -229,6 +229,29 @@ class MapWidget(QGraphicsView):
                     
                 self.temp_link_line.setLine(line)
             
+        # Tooltip logic
+        item = self.scene.itemAt(pos, self.transform())
+        if item:
+            tooltip_text = ""
+            if hasattr(item, 'node'):
+                tooltip_text = f"Node {item.node.id}"
+                # Add value if parameter selected
+                if hasattr(self.scene, 'current_node_param') and self.scene.current_node_param:
+                    val = self.project.engine.get_node_result(item.node.id, self.scene.current_node_param)
+                    tooltip_text += f"\n{self.scene.current_node_param.name}: {val:.2f}"
+            elif hasattr(item, 'link'):
+                tooltip_text = f"Link {item.link.id}"
+                if hasattr(self.scene, 'current_link_param') and self.scene.current_link_param:
+                    val = self.project.engine.get_link_result(item.link.id, self.scene.current_link_param)
+                    tooltip_text += f"\n{self.scene.current_link_param.name}: {val:.2f}"
+            
+            if tooltip_text:
+                self.setToolTip(tooltip_text)
+            else:
+                self.setToolTip("")
+        else:
+            self.setToolTip("")
+
         super().mouseMoveEvent(event)
 
     def find_nearest_node(self, pos, threshold=15):

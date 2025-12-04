@@ -1268,29 +1268,16 @@ class MainWindow(QMainWindow):
             
     def _print_document(self, printer):
         """Handle printing of the current document."""
-        # Determine active widget
-        # Check if browser dock is visible and showing table
-        # This is a bit tricky as we don't have a centralized "active view" concept yet
-        # except for the central widget which is MapWidget.
-        
-        # However, if the user is interacting with the Table View (which is a window or dock?),
-        # wait, TableView is not currently docked or central.
-        # Let's check where TableView is.
-        # Ah, we haven't integrated TableView into the main window permanently yet?
-        # It's usually opened via Report -> Table... which creates a new window or dialog?
-        # Let's check show_table method.
-        
-        # If we can't easily determine, we default to Map.
-        # But if we want to support Table printing, we need a way to know it's active.
-        
-        # For now, let's assume if the user invokes Print, they want to print the Map
-        # unless we add specific Print buttons to the Table window itself.
-        # Actually, standard GUI behavior is to print the active window.
-        
-        # Let's just print the Map for now as per original plan, 
-        # but if we want to support Table, we should probably add a Print button to the Table dialog/widget itself
-        # or make Table a central widget tab.
-        
+        # Check active subwindow
+        active_sub = self.mdi_area.activeSubWindow()
+        if active_sub:
+            widget = active_sub.widget()
+            # Check if widget supports printing
+            if hasattr(widget, 'print_table'):
+                widget.print_table(printer)
+                return
+                
+        # Default to Map
         painter = QPainter(printer)
         self.map_widget.render(painter)
         painter.end()
@@ -1985,7 +1972,7 @@ class MainWindow(QMainWindow):
         self.map_widget.fit_network()
     def find_object(self):
         """Show find object dialog."""
-        from gui.dialogs.find_dialog import FindObjectDialog
+        from gui.dialogs.find_object_dialog import FindObjectDialog
         dialog = FindObjectDialog(self.project, self)
 
         def on_object_selected(obj_type, obj_id):

@@ -92,6 +92,12 @@ class LegendWidget(QWidget):
         self._drag_start_pos = None
         super().mouseReleaseEvent(event)
 
+    def mouseDoubleClickEvent(self, event):
+        """Handle double click to open options."""
+        if event.button() == Qt.LeftButton:
+            self.show_options()
+        super().mouseDoubleClickEvent(event)
+
     # Context Menu
     def contextMenuEvent(self, event):
         from PySide6.QtWidgets import QMenu

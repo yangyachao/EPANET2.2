@@ -433,7 +433,7 @@ class MapWidget(QGraphicsView):
         item = self.scene.itemAt(self.mapToScene(event.pos()), self.transform())
         
         # Object Actions
-        if item and (hasattr(item, 'node') or hasattr(item, 'link') or hasattr(item, 'label')):
+        if item and (hasattr(item, 'node') or hasattr(item, 'link') or hasattr(item, 'label') or hasattr(item, 'link_item')):
             # Select it if not already selected
             if not item.isSelected():
                 self.scene.clearSelection()
@@ -447,7 +447,6 @@ class MapWidget(QGraphicsView):
             ))
             
             delete_action = menu.addAction("Delete")
-            delete_action = menu.addAction("Delete")
             delete_action.triggered.connect(self.delete_selected_items)
             
             if hasattr(item, 'link'):
@@ -456,6 +455,11 @@ class MapWidget(QGraphicsView):
                 # Capture position for adding vertex
                 pos = self.mapToScene(event.pos())
                 add_vertex_action.triggered.connect(lambda: item.add_vertex(pos))
+            
+            if hasattr(item, 'link_item') and hasattr(item, 'index'):
+                menu.addSeparator()
+                delete_vertex_action = menu.addAction("Delete Vertex")
+                delete_vertex_action.triggered.connect(lambda: item.link_item.delete_vertex(item.index))
             
             menu.addSeparator()
             

@@ -2,7 +2,7 @@
 
 from PySide6.QtWidgets import QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsItem, QGraphicsDropShadowEffect, QGraphicsSimpleTextItem, QGraphicsRectItem, QMenu
 from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPainter, QFont, QTransform, QPolygonF
+from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPainter, QFont, QTransform, QPolygonF, QPainterPathStroker
 
 class NodeItem(QGraphicsEllipseItem):
     """Base class for node graphics items.
@@ -214,7 +214,7 @@ class VertexHandleItem(QGraphicsRectItem):
         self.setPos(x, y)
         
         self.setFlag(QGraphicsItem.ItemIsMovable)
-        # self.setFlag(QGraphicsItem.ItemIsSelectable) # Don't select handle, keep link selected
+        # self.setFlag(QGraphicsItem.ItemIsSelectable) # Disable Qt selection to prevent parent deselect
         self.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
         self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
         
@@ -223,6 +223,8 @@ class VertexHandleItem(QGraphicsRectItem):
         self.setCursor(Qt.SizeAllCursor)
         self.setZValue(20) # Above links
         
+        self.is_selected = False
+        
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange:
             # Update vertex in link model
@@ -230,6 +232,26 @@ class VertexHandleItem(QGraphicsRectItem):
             self.link_item.update_vertex(self.index, value)
             
         return super().itemChange(change, value)
+
+    def mousePressEvent(self, event):
+        """Handle manual selection."""
+        # Toggle selection state
+        self.is_selected = not self.is_selected
+        
+        if self.is_selected:
+            self.setBrush(QBrush(Qt.black))
+            # Deselect other handles?
+            for handle in self.link_item.handles:
+                if handle != self and handle.is_selected:
+                    handle.is_selected = False
+                    handle.setBrush(QBrush(Qt.white))
+        else:
+            self.setBrush(QBrush(Qt.white))
+            
+        # Ensure parent link stays selected
+        self.link_item.setSelected(True)
+        
+        super().mousePressEvent(event)
 
     def contextMenuEvent(self, event):
         """Show context menu to delete vertex."""
@@ -486,6 +508,13 @@ class LinkItem(QGraphicsPathItem):
         path.lineTo(self.to_pos)
         self.setPath(path)
         self.update_label_positions()
+
+    def shape(self):
+        """Override shape to increase hit area."""
+        path = self.path()
+        stroker = QPainterPathStroker()
+        stroker.setWidth(10) # 10 pixel hit area
+        return stroker.createStroke(path)
 
 class PipeItem(LinkItem):
     """Graphics item for Pipe."""

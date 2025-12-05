@@ -46,3 +46,4 @@ MIT License - Same as EPANET 2.2
 ## Build
 cd epanet_pyside6
 pyinstaller --name="iepanet" --windowed --noconsole --clean --noconfirm --additional-hooks-dir=. main.py
+pyinstaller --name="iepanet" --windowed --noconsole --clean --noconfirm --additional-hooks-dir=. --add-data "resources:resources" -i iepanet.icns main.py

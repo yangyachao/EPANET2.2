@@ -620,11 +620,22 @@ class MainWindow(QMainWindow):
 
     def load_icon(self, name: str) -> QIcon:
         """Load icon from resources."""
-        # Assuming resources are in ../resources/icons relative to this file
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        import sys
+        
+        # Determine base directory
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+            # PyInstaller temp directory
+            base_dir = sys._MEIPASS
+        else:
+            # Development directory (relative to this file)
+            # this file is in gui/main_window.py, so up 2 levels is project root
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            
         icon_path = os.path.join(base_dir, "resources", "icons", name)
+        
         if os.path.exists(icon_path):
             return QIcon(icon_path)
+            
         return QIcon() # Return empty icon if not found
 
     def create_toolbars(self) -> None:
@@ -1090,6 +1101,7 @@ class MainWindow(QMainWindow):
         self.property_editor.set_object(None)
         self.map_widget.scene.load_network()
         self.update_title()
+        self.update_status_bar()
         self.status_bar.showMessage("New project created")
     
     def open_project(self) -> None:
@@ -1119,6 +1131,7 @@ class MainWindow(QMainWindow):
                 
                 self.map_widget.fit_network()
                 self.update_title()
+                self.update_status_bar()
                 self.status_bar.showMessage(f"Opened {filename}")
                 self.add_recent_file(filename)
             except InputFileError as e:
@@ -1884,8 +1897,10 @@ class MainWindow(QMainWindow):
     def update_analysis_options(self, new_options: dict) -> None:
         """Update project analysis options."""
         from core.constants import FlowUnits, HeadLossType, QualityType
+        from core.units import UnitConverter
         
         options = self.project.network.options
+        old_flow_units = options.flow_units
         
         # Update simple fields
         for key, value in new_options.items():
@@ -1900,8 +1915,40 @@ class MainWindow(QMainWindow):
                 else:
                     setattr(options, key, value)
         
+        # Check for unit conversion
+        new_flow_units = options.flow_units
+        if old_flow_units != new_flow_units:
+            old_sys = UnitConverter(old_flow_units).system
+            new_sys = UnitConverter(new_flow_units).system
+            
+            if old_sys != new_sys:
+                reply = QMessageBox.question(
+                    self, 
+                    "Convert Units?",
+                    f"You have changed flow units from {old_flow_units.name} to {new_flow_units.name}.\n"
+                    "Do you want to convert existing data values to the new unit system?\n\n"
+                    "Yes: Values will be converted (e.g. 100 ft -> 30.48 m)\n"
+                    "No: Values will remain numerically same (e.g. 100 ft -> 100 m)",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
+                )
+                
+                if reply == QMessageBox.Yes:
+                    self.project.convert_units(old_flow_units, new_flow_units)
+                    self.status_bar.showMessage(f"Units converted from {old_flow_units.name} to {new_flow_units.name}")
+            
+            # Refresh UI
+            self.browser_widget.refresh()
+            if hasattr(self, 'property_editor') and self.property_editor.current_object:
+                self.property_editor.set_object(self.property_editor.current_object)
+            if hasattr(self, 'map_widget'):
+                self.map_widget.scene.update()
+                self._update_map_colors()
+        
         self.project.modified = True
-        self.status_bar.showMessage("Analysis options updated")
+        self.update_status_bar()
+        if not self.status_bar.currentMessage():
+            self.status_bar.showMessage("Analysis options updated")
     
     def show_defaults(self) -> None:
         """Show project defaults dialog."""

@@ -445,6 +445,11 @@ class EPANETProject:
             opts = self.network.options
             
             # Hydraulics
+            if hasattr(wn.options.hydraulic, 'flow_units'):
+                wn.options.hydraulic.flow_units = opts.flow_units.name
+            elif hasattr(wn.options.hydraulic, 'inpfile_units'): # WNTR 1.x fallback
+                wn.options.hydraulic.inpfile_units = opts.flow_units.name
+
             if hasattr(wn.options.hydraulic, 'headloss'):
                 if opts.headloss_formula == HeadLossType.HW:
                     wn.options.hydraulic.headloss = 'H-W'
@@ -1434,4 +1439,284 @@ class EPANETProject:
             return
             
         self.network.remove_label(label_id)
+        self.modified = True
+    def convert_units(self, from_units: FlowUnits, to_units: FlowUnits) -> None:
+        """Convert all network data from one unit system to another."""
+        if from_units == to_units:
+            return
+            
+        from core.units import UnitConverter, UnitSystem
+        from models.curve import CurveType
+        
+        # Create converters
+        old_cv = UnitConverter(from_units)
+        new_cv = UnitConverter(to_units)
+        
+        # Check if length units changed (US <-> SI)
+        length_changed = old_cv.system != new_cv.system
+        
+        # 1. Nodes
+        for node in self.network.nodes.values():
+            # Elevation (Length)
+            if length_changed and node.elevation is not None:
+                val_si = old_cv.length_to_si(node.elevation)
+                node.elevation = new_cv.length_to_project(val_si)
+                
+            # Junctions
+            if node.node_type == NodeType.JUNCTION:
+                # Base Demand (Flow)
+                if node.base_demand is not None:
+                    val_si = old_cv.flow_to_si(node.base_demand)
+                    node.base_demand = new_cv.flow_to_project(val_si)
+                
+                # Multiple Demands (Flow)
+                if hasattr(node, 'demands') and node.demands:
+                    for demand in node.demands:
+                        if 'base_demand' in demand and demand['base_demand'] is not None:
+                            val_si = old_cv.flow_to_si(demand['base_demand'])
+                            demand['base_demand'] = new_cv.flow_to_project(val_si)
+                    
+            # Reservoirs
+            elif node.node_type == NodeType.RESERVOIR:
+                # Total Head (Length)
+                if length_changed and node.total_head is not None:
+                    val_si = old_cv.length_to_si(node.total_head)
+                    node.total_head = new_cv.length_to_project(val_si)
+                    
+            # Tanks
+            elif node.node_type == NodeType.TANK:
+                # Levels (Length)
+                if length_changed:
+                    if node.init_level is not None:
+                        node.init_level = new_cv.length_to_project(old_cv.length_to_si(node.init_level))
+                    if node.min_level is not None:
+                        node.min_level = new_cv.length_to_project(old_cv.length_to_si(node.min_level))
+                    if node.max_level is not None:
+                        node.max_level = new_cv.length_to_project(old_cv.length_to_si(node.max_level))
+                        
+                # Diameter (Diameter units: in <-> mm or ft <-> m?)
+                # Wait, UnitConverter.diameter_to_project handles in/mm vs m.
+                # But Tank Diameter is Length units (ft/m) usually?
+                # EPANET Manual: "Tank diameter... in feet (meters)."
+                # Pipe Diameter is in inches/mm.
+                # Let's check UnitConverter.
+                # It has diameter_to_project (in/mm).
+                # But Tank diameter is typically same units as coordinates/elevation?
+                # WNTR documentation: "diameter (float): Tank diameter (m)."
+                # EPANET 2.2 User Manual: "Diameter... The tank diameter... (feet or meters)."
+                # So Tank Diameter uses LENGTH units, NOT Diameter units (which are for pipes).
+                if length_changed and node.diameter is not None:
+                    # Use length conversion for Tank Diameter
+                    val_si = old_cv.length_to_si(node.diameter)
+                    node.diameter = new_cv.length_to_project(val_si)
+                    
+                # Min Volume (Volume)
+                # Volume units: ft3 or m3
+                if length_changed and node.min_volume is not None:
+                    # Simple cubic conversion
+                    # 1 m = 3.28084 ft => 1 m3 = 35.3147 ft3
+                    factor = 35.3147
+                    if old_cv.system == UnitSystem.US: # ft3 -> m3
+                        val_si = node.min_volume / factor
+                    else: # m3 -> m3
+                        val_si = node.min_volume
+                        
+                    if new_cv.system == UnitSystem.US: # m3 -> ft3
+                        node.min_volume = val_si * factor
+                    else:
+                        node.min_volume = val_si
+                        
+        # 2. Links
+        for link in self.network.links.values():
+            # Pipes
+            if link.link_type == LinkType.PIPE:
+                # Length (Length)
+                if length_changed and link.length is not None:
+                    link.length = new_cv.length_to_project(old_cv.length_to_si(link.length))
+                    
+                # Diameter (Diameter: in/mm)
+                if length_changed and link.diameter is not None:
+                    # Pipe diameter IS in inches or mm
+                    val_si = old_cv.diameter_to_si(link.diameter)
+                    link.diameter = new_cv.diameter_to_project(val_si)
+                
+                # Roughness (Darcy-Weisbach: millifeet <-> mm)
+                if length_changed and self.network.options.headloss_formula == HeadLossType.DW:
+                     if link.roughness is not None:
+                         # 1 millifeet = 0.3048 mm
+                         # Same factor as length (ft -> m), just scaled
+                         # ft -> m is * 0.3048
+                         # mft -> mm is * 0.3048
+                         if old_cv.system == UnitSystem.US: # mft -> mm
+                             link.roughness = link.roughness * 0.3048
+                         else: # mm -> mft
+                             link.roughness = link.roughness / 0.3048
+                    
+            # Pumps
+            elif link.link_type == LinkType.PUMP:
+                # Power (HP <-> kW)
+                if length_changed and link.power is not None:
+                    # 1 HP = 0.7457 kW
+                    if old_cv.system == UnitSystem.US: # HP -> kW
+                        val_kw = link.power * 0.7457
+                    else: # kW -> kW
+                        val_kw = link.power
+                        
+                    if new_cv.system == UnitSystem.US: # kW -> HP
+                        link.power = val_kw / 0.7457
+                    else:
+                        link.power = val_kw
+                        
+            # Valves
+            elif link.link_type in [LinkType.PRV, LinkType.PSV, LinkType.PBV]:
+                # Diameter (in/mm)
+                if length_changed and link.diameter is not None:
+                    val_si = old_cv.diameter_to_si(link.diameter)
+                    link.diameter = new_cv.diameter_to_project(val_si)
+                    
+                # Setting (Pressure: psi/m)
+                if length_changed and link.valve_setting is not None:
+                    val_si = old_cv.pressure_to_si(link.valve_setting)
+                    link.valve_setting = new_cv.pressure_to_project(val_si)
+                    
+            elif link.link_type == LinkType.FCV:
+                # Diameter
+                if length_changed and link.diameter is not None:
+                    val_si = old_cv.diameter_to_si(link.diameter)
+                    link.diameter = new_cv.diameter_to_project(val_si)
+                    
+                # Setting (Flow)
+                if link.valve_setting is not None:
+                    val_si = old_cv.flow_to_si(link.valve_setting)
+                    link.valve_setting = new_cv.flow_to_project(val_si)
+                    
+        # 3. Curves
+        for curve in self.network.curves.values():
+            new_points = []
+            for x, y in curve.points:
+                nx, ny = x, y
+                
+                # X-Axis
+                if curve.curve_type == CurveType.VOLUME:
+                    # X is Height (Length)
+                    if length_changed: nx = new_cv.length_to_project(old_cv.length_to_si(x))
+                elif curve.curve_type in [CurveType.PUMP, CurveType.EFFICIENCY, CurveType.HEADLOSS]:
+                    # X is Flow
+                    nx = new_cv.flow_to_project(old_cv.flow_to_si(x))
+                    
+                # Y-Axis
+                if curve.curve_type == CurveType.VOLUME:
+                    # Y is Volume
+                    if length_changed:
+                        factor = 35.3147
+                        val_si = y / factor if old_cv.system == UnitSystem.US else y
+                        ny = val_si * factor if new_cv.system == UnitSystem.US else val_si
+                elif curve.curve_type == CurveType.PUMP:
+                    # Y is Head (Length)
+                    if length_changed: ny = new_cv.length_to_project(old_cv.length_to_si(y))
+                elif curve.curve_type == CurveType.HEADLOSS:
+                    # Y is Headloss (Length)
+                    if length_changed: ny = new_cv.length_to_project(old_cv.length_to_si(y))
+                    
+                new_points.append((nx, ny))
+            curve.points = new_points
+            
+        # 4. Map Coordinates (if length changed)
+        if length_changed:
+            for node in self.network.nodes.values():
+                # X, Y
+                x_si = old_cv.length_to_si(node.x)
+                y_si = old_cv.length_to_si(node.y)
+                node.x = new_cv.length_to_project(x_si)
+                node.y = new_cv.length_to_project(y_si)
+                
+            # Update map bounds
+            self.network.map_bounds['min_x'] = new_cv.length_to_project(old_cv.length_to_si(self.network.map_bounds['min_x']))
+            self.network.map_bounds['min_y'] = new_cv.length_to_project(old_cv.length_to_si(self.network.map_bounds['min_y']))
+            self.network.map_bounds['max_x'] = new_cv.length_to_project(old_cv.length_to_si(self.network.map_bounds['max_x']))
+            self.network.map_bounds['max_y'] = new_cv.length_to_project(old_cv.length_to_si(self.network.map_bounds['max_y']))
+            
+            # Backdrop Coordinates
+            if self.backdrop_info:
+                img_path, ul_x, ul_y, lr_x, lr_y = self.backdrop_info
+                
+                ul_x = new_cv.length_to_project(old_cv.length_to_si(ul_x))
+                ul_y = new_cv.length_to_project(old_cv.length_to_si(ul_y))
+                lr_x = new_cv.length_to_project(old_cv.length_to_si(lr_x))
+                lr_y = new_cv.length_to_project(old_cv.length_to_si(lr_y))
+                
+                self.backdrop_info = (img_path, ul_x, ul_y, lr_x, lr_y)
+                
+        # 5. Emitter Coefficients
+        # Unit: (Flow Unit) / (Pressure Unit)^gamma
+        # Conversion: C_new = C_old * (Q_new/Q_old) / (P_new/P_old)^gamma
+        # Q_factor: 1 SI Flow = X Old Flow = Y New Flow => Q_new = Q_old * (Y/X)
+        # P_factor: 1 SI Press = A Old Press = B New Press => P_new = P_old * (B/A)
+        
+        # Calculate scaling factors relative to SI
+        # Q_old_to_si = old_cv.flow_to_si(1.0)
+        # Q_new_to_si = new_cv.flow_to_si(1.0) # This is wrong direction
+        
+        # We want Factor F such that Val_New = Val_Old * F
+        # Val_SI = Val_Old * Old_to_SI_Factor
+        # Val_New = Val_SI * SI_to_New_Factor
+        # F = Old_to_SI_Factor * SI_to_New_Factor
+        
+        # Flow Factor
+        q_old_to_si = old_cv.flow_to_si(1.0)
+        q_si_to_new = new_cv.flow_to_project(1.0)
+        q_factor = q_old_to_si * q_si_to_new
+        
+        # Pressure Factor
+        if length_changed:
+            p_old_to_si = old_cv.pressure_to_si(1.0)
+            p_si_to_new = new_cv.pressure_to_project(1.0)
+            p_factor = p_old_to_si * p_si_to_new
+        else:
+            p_factor = 1.0
+            
+        gamma = self.network.options.emitter_exponent
+        emitter_factor = q_factor / (p_factor ** gamma)
+        
+        if abs(emitter_factor - 1.0) > 1e-6:
+            for node in self.network.nodes.values():
+                if hasattr(node, 'emitter_coeff') and node.emitter_coeff is not None and node.emitter_coeff > 0:
+                    node.emitter_coeff *= emitter_factor
+                    
+        # 6. Controls
+        # Simple Controls: LINK x STATUS AT TIME t / IF NODE y [PRESSURE|LEVEL] > z
+        # We need to parse and convert 'z' if it's PRESSURE or LEVEL
+        import re
+        
+        # Regex to find "PRESSURE|LEVEL [<>]=? value"
+        # Note: EPANET controls are case insensitive
+        # Value can be float
+        
+        for control in self.network.controls:
+            # We assume control is stored as object with properties, but we might need to update string representation if we store that
+            # In our model, SimpleControl has: link_id, status, control_type, node_id, operator, value, time
+            
+            if control.control_type == "IF_NODE":
+                # Check if we need to convert the value
+                # We don't explicitly store "PRESSURE" or "LEVEL" keyword in SimpleControl struct?
+                # Let's check models/control.py
+                # It seems SimpleControl might infer type from node type? 
+                # Or maybe we missed storing the variable type (Pressure vs Level vs Tank Level)
+                # EPANET: IF NODE x PRESSURE > y
+                # IF NODE x LEVEL > y (Only for Tanks)
+                
+                # If we don't know if it's Pressure or Level, we check Node Type
+                node = self.network.get_node(control.node_id)
+                if node:
+                    if node.node_type == NodeType.TANK:
+                        # It's Level -> Length
+                        if length_changed:
+                            val_si = old_cv.length_to_si(control.value)
+                            control.value = new_cv.length_to_project(val_si)
+                    else:
+                        # It's Pressure -> Pressure
+                        if length_changed:
+                            val_si = old_cv.pressure_to_si(control.value)
+                            control.value = new_cv.pressure_to_project(val_si)
+                            
         self.modified = True
